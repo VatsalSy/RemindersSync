@@ -455,7 +455,7 @@ func syncTasksFromVault(tasks: [ObsidianTask], listName: String, eventStore: EKE
         
         let newMapping = TaskMapping(
             obsidianId: task.id,
-            reminderId: reminder.calendarItemIdentifier ?? "",
+            reminderId: reminder.calendarItemIdentifier, // ?? "",
             filePath: task.filePath,
             taskText: task.text
         )
@@ -537,7 +537,7 @@ func syncCompletedReminders(listName: String, eventStore: EKEventStore, vaultPat
     }
     
     for reminder in completedReminders {
-        if let mapping = mappingStore.findMapping(reminderId: reminder.calendarItemIdentifier ?? "") {
+        if let mapping = mappingStore.findMapping(reminderId: reminder.calendarItemIdentifier) {
             let filePath = (vaultPath as NSString).appendingPathComponent(mapping.filePath)
             
             if FileManager.default.fileExists(atPath: filePath) {
@@ -562,7 +562,8 @@ func syncCompletedReminders(listName: String, eventStore: EKEventStore, vaultPat
             }
             
             // Delete the completed reminder after marking the task as done in Obsidian
-            try await eventStore.remove(reminder, commit: true)
+            // try await eventStore.remove(reminder, commit: true)
+            try eventStore.remove(reminder, commit: true)
         }
     }
 }
