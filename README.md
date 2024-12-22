@@ -33,7 +33,6 @@ A Swift-based command-line tool that provides two-way synchronization between yo
   - Exports all incomplete reminders to a markdown file (`_AppleReminders.md`)
   - Organizes tasks by list
   - Preserves due dates and notes
-  - Maintains a mapping file (`._RemindersMapping.json`) for reliable sync
   - Excludes specific lists (e.g., "Groceries", "Obsidian", "Shopping", "Cooking-HouseHold")
 
 ## Requirements

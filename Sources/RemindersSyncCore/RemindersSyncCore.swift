@@ -737,4 +737,21 @@ public func saveTaskMappings(_ store: TaskMappingStore, vaultPath: String) throw
         print("Warning: Failed to save mapping file. Error: \(error.localizedDescription)")
         throw error
     }
+}
+
+// Add these new functions near the top, after the existing structs
+
+public func ensureMappingFileOrCleanup(in vaultPath: String) throws {
+    let mappingPath = (vaultPath as NSString).appendingPathComponent("._RemindersMapping.json")
+    if !FileManager.default.fileExists(atPath: mappingPath) {
+        print("No mapping file found. Cleaning up existing task IDs...")
+        try cleanupTaskIds(in: vaultPath)
+    }
+}
+
+public func initializeEventStore() async throws -> (EKEventStore, CLIOptions) {
+    let options = CLIOptions.parse()
+    let eventStore = EKEventStore()
+    try await requestRemindersAccess(eventStore: eventStore)
+    return (eventStore, options)
 } 
