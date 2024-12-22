@@ -4,6 +4,11 @@ A Swift-based command-line tool that provides two-way synchronization between yo
 
 ## Features
 
+- **Vault-Specific Reminders Lists**:
+  - Each Obsidian vault gets its own dedicated Reminders list
+  - Lists are automatically created and named after your vault
+  - Perfect for managing multiple vaults independently
+
 - **Two-Way Task Completion Sync**:
   - Tasks completed in Apple Reminders are marked as completed (`- [x]`) in Obsidian files
   - Completed tasks in Obsidian are synced to Reminders to maintain consistency
@@ -24,7 +29,7 @@ A Swift-based command-line tool that provides two-way synchronization between yo
   - Organizes tasks by list
   - Preserves due dates and notes
   - Maintains a mapping file (`._RemindersMapping.json`) for reliable sync
-  - Excludes specific lists (e.g., "Groceries", "Obsidian")
+  - Excludes specific lists (e.g., "Groceries", "Obsidian", "Shopping", "Cooking-HouseHold")
 
 ## Requirements
 
@@ -133,7 +138,7 @@ The following reminder lists are excluded from export:
 
 By default, the tool:
 - Scans all markdown files in your vault for tasks
-- Syncs found tasks to a Reminders list named "Obsidian"
+- Syncs found tasks to a Reminders list named after your vault
 - Exports other reminders to `_AppleReminders.md` in your vault root
 
 ## Permissions

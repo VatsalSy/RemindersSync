@@ -393,12 +393,33 @@ func findCompletedTasks(in vaultPath: String) throws -> [ObsidianTask] {
     return tasks
 }
 
-func syncTasksFromVault(tasks: [ObsidianTask], listName: String, eventStore: EKEventStore) async throws {
-    guard let targetCalendar = eventStore.calendars(for: .reminder)
-        .first(where: { $0.title == listName }) else {
-        throw NSError(domain: "RemindersSync", code: 2,
-                     userInfo: [NSLocalizedDescriptionKey: "List \(listName) not found"])
+func getOrCreateVaultCalendar(for vaultPath: String, eventStore: EKEventStore) throws -> EKCalendar {
+    let vaultName = URL(fileURLWithPath: vaultPath).lastPathComponent
+    if let calendar = eventStore.calendars(for: .reminder).first(where: { $0.title == vaultName }) {
+        return calendar
+    } else {
+        let newCalendar = EKCalendar(for: .reminder, eventStore: eventStore)
+        newCalendar.title = vaultName
+        
+        // Choose a source. Use the default if available; otherwise, pick the first local source.
+        if let defaultSource = eventStore.defaultCalendarForNewReminders()?.source {
+            newCalendar.source = defaultSource
+        } else if let localSource = eventStore.sources.first(where: { $0.sourceType == .local }) {
+            newCalendar.source = localSource
+        } else {
+            throw NSError(domain: "RemindersSync",
+                          code: 2,
+                          userInfo: [NSLocalizedDescriptionKey: "No valid Reminder source found"])
+        }
+        
+        try eventStore.saveCalendar(newCalendar, commit: true)
+        return newCalendar
     }
+}
+
+func syncTasksFromVault(tasks: [ObsidianTask], eventStore: EKEventStore) async throws {
+    guard !tasks.isEmpty else { return }
+    let targetCalendar = try getOrCreateVaultCalendar(for: tasks[0].vaultPath, eventStore: eventStore)
     
     var mappingStore = try loadTaskMappings(vaultPath: tasks.first?.vaultPath ?? "")
     
@@ -472,12 +493,9 @@ func syncTasksFromVault(tasks: [ObsidianTask], listName: String, eventStore: EKE
     try saveTaskMappings(mappingStore, vaultPath: tasks.first?.vaultPath ?? "")
 }
 
-func syncObsidianCompletedTasks(tasks: [ObsidianTask], listName: String, eventStore: EKEventStore) async throws {
-    guard let targetCalendar = eventStore.calendars(for: .reminder)
-        .first(where: { $0.title == listName }) else {
-        throw NSError(domain: "RemindersSync", code: 2,
-                     userInfo: [NSLocalizedDescriptionKey: "List \(listName) not found"])
-    }
+func syncObsidianCompletedTasks(tasks: [ObsidianTask], eventStore: EKEventStore) async throws {
+    guard !tasks.isEmpty else { return }
+    let targetCalendar = try getOrCreateVaultCalendar(for: tasks[0].vaultPath, eventStore: eventStore)
     
     let mappingStore = try loadTaskMappings(vaultPath: tasks.first?.vaultPath ?? "")
     
@@ -512,12 +530,8 @@ func syncObsidianCompletedTasks(tasks: [ObsidianTask], listName: String, eventSt
     }
 }
 
-func syncCompletedReminders(listName: String, eventStore: EKEventStore, vaultPath: String) async throws {
-    guard let targetCalendar = eventStore.calendars(for: .reminder)
-        .first(where: { $0.title == listName }) else {
-        throw NSError(domain: "RemindersSync", code: 2,
-                     userInfo: [NSLocalizedDescriptionKey: "List \(listName) not found"])
-    }
+func syncCompletedReminders(eventStore: EKEventStore, vaultPath: String) async throws {
+    let targetCalendar = try getOrCreateVaultCalendar(for: vaultPath, eventStore: eventStore)
     
     let mappingStore = try loadTaskMappings(vaultPath: vaultPath)
     
@@ -727,12 +741,12 @@ struct RemindersSyncCLI {
             }
             
             let completedTasks = try findCompletedTasks(in: options.vaultPath)
-            try await syncObsidianCompletedTasks(tasks: completedTasks, listName: "Obsidian", eventStore: eventStore)
+            try await syncObsidianCompletedTasks(tasks: completedTasks, eventStore: eventStore)
             
-            try await syncCompletedReminders(listName: "Obsidian", eventStore: eventStore, vaultPath: options.vaultPath)
+            try await syncCompletedReminders(eventStore: eventStore, vaultPath: options.vaultPath)
             
             let tasks = try findIncompleteTasks(in: options.vaultPath)
-            try await syncTasksFromVault(tasks: tasks, listName: "Obsidian", eventStore: eventStore)
+            try await syncTasksFromVault(tasks: tasks, eventStore: eventStore)
             
             let excludedLists: Set<String> = [
                 "Obsidian",
