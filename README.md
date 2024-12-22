@@ -6,7 +6,8 @@ A Swift-based command-line tool that provides two-way synchronization between yo
 
 - **Two-Way Task Completion Sync**:
   - Tasks completed in Apple Reminders are marked as completed (`- [x]`) in Obsidian files
-  - Completed tasks in Obsidian are not re-synced to Reminders
+  - Completed tasks in Obsidian are synced to Reminders to maintain consistency
+  - Uses a robust task mapping system with SHA-256 signatures for reliable tracking
   - Maintains task completion state across both platforms
 
 - **Vault to Reminders Sync**:
@@ -15,12 +16,14 @@ A Swift-based command-line tool that provides two-way synchronization between yo
   - Shows file names with link emoji (🔗) in reminder titles
   - Supports Obsidian-style due dates (📅 YYYY-MM-DD)
   - Uses proper Obsidian URI scheme for direct file opening
-  - Prevents duplicate entries
+  - Prevents duplicate entries using cryptographic task signatures
+  - Handles multiple tasks per line efficiently
 
 - **Reminders to Vault Export**:
-  - Exports all incomplete reminders to a markdown file
+  - Exports all incomplete reminders to a markdown file (`_AppleReminders.md`)
   - Organizes tasks by list
   - Preserves due dates and notes
+  - Maintains a mapping file (`._RemindersMapping.json`) for reliable sync
   - Excludes specific lists (e.g., "Groceries", "Obsidian")
 
 ## Requirements
