@@ -399,7 +399,7 @@ public func findCompletedTasks(in vaultPath: String) throws -> [ObsidianTask] {
     return tasks
 }
 
-// Continue copying all other functions, making them public
+// Continue copying all other functions from main.swift, making them public
 public func getOrCreateVaultCalendar(for vaultPath: String, eventStore: EKEventStore) throws -> EKCalendar {
     let vaultName = URL(fileURLWithPath: vaultPath).lastPathComponent
     if let calendar = eventStore.calendars(for: .reminder).first(where: { $0.title == vaultName }) {
@@ -583,6 +583,9 @@ public func syncCompletedReminders(eventStore: EKEventStore, vaultPath: String) 
             }
         }
     }
+    
+    // Save the mapping store after processing all reminders
+    try saveTaskMappings(mappingStore, vaultPath: vaultPath)
 }
 
 public func requestRemindersAccess(eventStore: EKEventStore) async throws {
