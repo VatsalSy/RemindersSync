@@ -142,6 +142,61 @@ func syncTasksFromVault(tasks: [ObsidianTask], listName: String, eventStore: EKE
     try eventStore.commit()
 }
 
+func syncCompletedReminders(listName: String, eventStore: EKEventStore, vaultPath: String) async throws {
+    // Get the Obsidian list
+    guard let targetCalendar = eventStore.calendars(for: .reminder)
+        .first(where: { $0.title == listName }) else {
+        throw NSError(domain: "RemindersSync", code: 2,
+                     userInfo: [NSLocalizedDescriptionKey: "List \(listName) not found"])
+    }
+    
+    // Fetch completed reminders from the Obsidian list
+    let predicate = eventStore.predicateForCompletedReminders(withCompletionDateStarting: nil, ending: nil, calendars: [targetCalendar])
+    let completedReminders = try await withCheckedThrowingContinuation { continuation in
+        eventStore.fetchReminders(matching: predicate) { reminders in
+            if let reminders = reminders {
+                continuation.resume(returning: reminders)
+            } else {
+                continuation.resume(throwing: NSError(
+                    domain: "RemindersSync",
+                    code: 3,
+                    userInfo: [NSLocalizedDescriptionKey: "Failed to fetch reminders"]
+                ))
+            }
+        }
+    }
+    
+    // For each completed reminder, mark its corresponding task as completed in Obsidian
+    for reminder in completedReminders {
+        if let title = reminder.title {
+            // Extract the filename from the title (after the 🔗 emoji)
+            if let fileNameRange = title.range(of: "🔗 ") {
+                let fileName = String(title[fileNameRange.upperBound...]).trimmingCharacters(in: .whitespaces)
+                let filePath = (vaultPath as NSString).appendingPathComponent(fileName)
+                
+                if FileManager.default.fileExists(atPath: filePath) {
+                    let content = try String(contentsOfFile: filePath, encoding: .utf8)
+                    var lines = content.components(separatedBy: .newlines)
+                    
+                    // Find and update the task
+                    for (index, line) in lines.enumerated() {
+                        // Get the task text without the filename and emoji
+                        let taskText = title.components(separatedBy: " 🔗 ")[0]
+                        if line.contains("- [ ] \(taskText)") {
+                            lines[index] = line.replacingOccurrences(of: "- [ ]", with: "- [x]")
+                            break
+                        }
+                    }
+                    
+                    // Write back to file
+                    let updatedContent = lines.joined(separator: "\n")
+                    try updatedContent.write(to: URL(fileURLWithPath: filePath), atomically: true, encoding: .utf8)
+                }
+            }
+        }
+    }
+}
+
 func requestRemindersAccess(eventStore: EKEventStore) async throws {
     let authorizationStatus = EKEventStore.authorizationStatus(for: .reminder)
     switch authorizationStatus {
@@ -232,14 +287,18 @@ struct RemindersSyncCLI {
         do {
             try await requestRemindersAccess(eventStore: eventStore)
             
+            // First sync completed reminders from Apple Reminders to Obsidian
+            try await syncCompletedReminders(listName: "Obsidian", eventStore: eventStore, vaultPath: options.vaultPath)
+            
+            // Then sync incomplete tasks from Obsidian to Reminders
             let tasks = try findIncompleteTasks(in: options.vaultPath)
             try await syncTasksFromVault(tasks: tasks, listName: "Obsidian", eventStore: eventStore)
             
+            // Export other reminders to markdown
             let excludedLists: Set<String> = [
                 "Obsidian",
                 "Groceries",
-                "India trip shopping list",
-                "Future shopping list",
+                "Shopping",
                 "Cooking-HouseHold"
             ]
             try await exportRemindersToMarkdown(excludeLists: excludedLists, eventStore: eventStore, outputPath: options.outputPath)
