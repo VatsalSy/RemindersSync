@@ -20,6 +20,14 @@ A Swift-based command-line tool that provides two-way synchronization between yo
   - Uses a robust task mapping system with SHA-256 signatures for reliable tracking
   - Maintains task completion state across both platforms
 
+- **Task Mapping System**:
+  - Uses a hidden `._RemindersMapping.json` file to maintain task relationships
+  - Maps Obsidian tasks to Apple Reminders using unique identifiers
+  - Employs SHA-256 signatures to prevent duplicate tasks
+  - Automatically handles task ID cleanup and regeneration
+  - Preserves task mappings across sync operations
+  - Provides reliable two-way sync even if tasks are modified
+
 - **Vault to Reminders Sync** (via ScanVault):
   - Scans your entire Obsidian vault for incomplete tasks (`- [ ]`)
   - Creates reminders with clickable links back to source files
