@@ -748,12 +748,14 @@ struct RemindersSyncCLI {
             let tasks = try findIncompleteTasks(in: options.vaultPath)
             try await syncTasksFromVault(tasks: tasks, eventStore: eventStore)
             
-            let excludedLists: Set<String> = [
-                "Obsidian",
+            let vaultName = URL(fileURLWithPath: options.vaultPath).lastPathComponent
+            var excludedLists: Set<String> = [
                 "Groceries",
                 "Shopping",
                 "Cooking-HouseHold"
             ]
+            excludedLists.insert(vaultName)
+            
             try await exportRemindersToMarkdown(excludeLists: excludedLists, eventStore: eventStore, outputPath: options.outputPath)
             
         } catch {

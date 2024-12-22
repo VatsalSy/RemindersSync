@@ -34,7 +34,7 @@
               "type": "markdown",
               "state": {
                 "file": "Testreminder.md",
-                "mode": "source",
+                "mode": "preview",
                 "source": false
               },
               "icon": "lucide-file",
@@ -183,8 +183,8 @@
   },
   "active": "affcf5a43ba10a3a",
   "lastOpenFiles": [
-    "_AppleReminders.md",
     "testing 2nd reminder.md",
+    "_AppleReminders.md",
     "Testreminder.md",
     "today.md"
   ]
