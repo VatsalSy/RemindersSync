@@ -43,6 +43,46 @@ cd RemindersSync
 swift build
 ```
 
+## System-wide Installation
+
+To make the tool available system-wide:
+
+1. Build a release version:
+```bash
+cd /path/to/RemindersSync
+swift build -c release
+```
+
+2. Copy the executable to your local bin directory:
+```bash
+sudo mkdir -p /usr/local/bin
+sudo cp .build/release/SwiftRemindersCLI /usr/local/bin/obsidian-reminders
+```
+
+3. Make it executable:
+```bash
+sudo chmod +x /usr/local/bin/obsidian-reminders
+```
+
+Now you can run the tool from anywhere using:
+```bash
+obsidian-reminders ~/path/to/vault
+```
+
+### Optional: Create an Alias
+
+Add this to your `~/.zshrc` or `~/.bashrc`:
+```bash
+alias sync-obsidian='obsidian-reminders "/Users/your-username/path/to/your/vault"'
+```
+
+Then you can simply run:
+```bash
+sync-obsidian
+```
+
+Remember to run `source ~/.zshrc` (or `source ~/.bashrc`) after adding the alias.
+
 ## Usage
 
 Run the tool with your Obsidian vault path:
