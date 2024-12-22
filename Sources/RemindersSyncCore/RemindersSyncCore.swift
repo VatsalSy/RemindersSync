@@ -63,8 +63,6 @@ public struct CLIOptions {
 }
 
 // Copy all the other structs and functions from main.swift, making them public
-// Include TaskMapping, TaskMappingStore, and all the helper functions
-
 public struct TaskMapping: Codable {
     public let obsidianId: String
     public let reminderId: String
@@ -94,26 +92,49 @@ public struct TaskMappingStore: Codable {
     }
     
     public func findMapping(filePath: String, taskText: String) -> TaskMapping? {
-        let signature = TaskMapping(
-            obsidianId: "", 
-            reminderId: "", 
-            filePath: filePath,
-            taskText: taskText
-        ).signature
+        // First try exact match
+        if let mapping = mappings.first(where: { $0.filePath == filePath && $0.taskText == taskText }) {
+            return mapping
+        }
         
-        return mappings.first { $0.signature == signature }
+        // If no exact match, try matching without dates and IDs
+        let cleanTaskText = taskText.replacingOccurrences(of: " 📅 \\d{4}-\\d{2}-\\d{2}", with: "", options: .regularExpression)
+                                  .replacingOccurrences(of: " ⏳ \\d{4}-\\d{2}-\\d{2}", with: "", options: .regularExpression)
+                                  .replacingOccurrences(of: " \\^[A-Z0-9-]+", with: "", options: .regularExpression)
+                                  .replacingOccurrences(of: " <!-- id: [A-Z0-9-]+ -->", with: "", options: .regularExpression)
+                                  .trimmingCharacters(in: .whitespaces)
+        
+        return mappings.first { mapping in
+            let cleanMappingText = mapping.taskText.replacingOccurrences(of: " 📅 \\d{4}-\\d{2}-\\d{2}", with: "", options: .regularExpression)
+                                                .replacingOccurrences(of: " ⏳ \\d{4}-\\d{2}-\\d{2}", with: "", options: .regularExpression)
+                                                .replacingOccurrences(of: " \\^[A-Z0-9-]+", with: "", options: .regularExpression)
+                                                .replacingOccurrences(of: " <!-- id: [A-Z0-9-]+ -->", with: "", options: .regularExpression)
+                                                .trimmingCharacters(in: .whitespaces)
+            return mapping.filePath == filePath && cleanMappingText == cleanTaskText
+        }
     }
     
     public func findMapping(reminderId: String) -> TaskMapping? {
         return mappings.first { $0.reminderId == reminderId }
     }
+    
+    public func findMappingByReminderId(_ reminderId: String) -> TaskMapping? {
+        return mappings.first { $0.reminderId == reminderId }
+    }
+    
+    public func findMapping(obsidianId: String) -> TaskMapping? {
+        return mappings.first { $0.obsidianId == obsidianId }
+    }
 }
 
 // Add all the helper functions from main.swift here, making them public
 public func loadTaskMappings(vaultPath: String) throws -> TaskMappingStore {
-    // Copy implementation from main.swift
+    print("Loading task mappings from vault: \(vaultPath)")  // Debug log
     let mappingFile = (vaultPath as NSString).appendingPathComponent("._RemindersMapping.json")
+    print("Looking for mapping file at: \(mappingFile)")  // Debug log
+    
     if FileManager.default.fileExists(atPath: mappingFile) {
+        print("Found existing mapping file")  // Debug log
         do {
             let data = try Data(contentsOf: URL(fileURLWithPath: mappingFile))
             guard !data.isEmpty else {
@@ -122,7 +143,9 @@ public func loadTaskMappings(vaultPath: String) throws -> TaskMappingStore {
             }
             
             do {
-                return try JSONDecoder().decode(TaskMappingStore.self, from: data)
+                let store = try JSONDecoder().decode(TaskMappingStore.self, from: data)
+                print("Successfully loaded \(store.mappings.count) mappings")  // Debug log
+                return store
             } catch {
                 print("Warning: Could not decode mapping file. Creating new mapping store. Error: \(error.localizedDescription)")
                 let backupFile = mappingFile + ".backup"
@@ -133,11 +156,29 @@ public func loadTaskMappings(vaultPath: String) throws -> TaskMappingStore {
             print("Warning: Could not read mapping file. Creating new mapping store. Error: \(error.localizedDescription)")
             return TaskMappingStore(mappings: [])
         }
+    } else {
+        print("No existing mapping file found at \(mappingFile). Creating new store.")  // Debug log
+        return TaskMappingStore(mappings: [])
     }
-    return TaskMappingStore(mappings: [])
 }
 
-// Copy all other functions from main.swift, making them public
+public func saveTaskMappings(_ store: TaskMappingStore, vaultPath: String) throws {
+    print("Saving \(store.mappings.count) mappings to vault: \(vaultPath)")  // Debug log
+    let mappingFile = (vaultPath as NSString).appendingPathComponent("._RemindersMapping.json")
+    print("Saving to mapping file at: \(mappingFile)")  // Debug log
+    
+    do {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(store)
+        try data.write(to: URL(fileURLWithPath: mappingFile), options: .atomic)
+        print("Successfully saved mapping file")  // Debug log
+    } catch {
+        print("Warning: Failed to save mapping file. Error: \(error.localizedDescription)")
+        throw error
+    }
+}
+
 public func findIncompleteTasks(in vaultPath: String) throws -> [ObsidianTask] {
     var tasks: [ObsidianTask] = []
     var updatedFiles: [(URL, String)] = []
@@ -399,31 +440,6 @@ public func findCompletedTasks(in vaultPath: String) throws -> [ObsidianTask] {
     return tasks
 }
 
-// Continue copying all other functions from main.swift, making them public
-public func getOrCreateVaultCalendar(for vaultPath: String, eventStore: EKEventStore) throws -> EKCalendar {
-    let vaultName = URL(fileURLWithPath: vaultPath).lastPathComponent
-    if let calendar = eventStore.calendars(for: .reminder).first(where: { $0.title == vaultName }) {
-        return calendar
-    } else {
-        let newCalendar = EKCalendar(for: .reminder, eventStore: eventStore)
-        newCalendar.title = vaultName
-        
-        // Choose a source. Use the default if available; otherwise, pick the first local source.
-        if let defaultSource = eventStore.defaultCalendarForNewReminders()?.source {
-            newCalendar.source = defaultSource
-        } else if let localSource = eventStore.sources.first(where: { $0.sourceType == .local }) {
-            newCalendar.source = localSource
-        } else {
-            throw NSError(domain: "RemindersSync",
-                          code: 2,
-                          userInfo: [NSLocalizedDescriptionKey: "No valid Reminder source found"])
-        }
-        
-        try eventStore.saveCalendar(newCalendar, commit: true)
-        return newCalendar
-    }
-}
-
 public func syncTasksFromVault(tasks: [ObsidianTask], eventStore: EKEventStore) async throws {
     guard !tasks.isEmpty else { return }
     let targetCalendar = try getOrCreateVaultCalendar(for: tasks[0].vaultPath, eventStore: eventStore)
@@ -445,23 +461,20 @@ public func syncTasksFromVault(tasks: [ObsidianTask], eventStore: EKEventStore) 
         }
     }
     
-    mappingStore.mappings.removeAll { mapping in
-        existingReminders.contains { reminder in
-            reminder.calendarItemIdentifier == mapping.reminderId && reminder.isCompleted
-        }
-    }
+    print("Found \(existingReminders.count) existing reminders")
     
     for task in tasks {
         var reminder: EKReminder?
-        if let mapping = mappingStore.findMapping(filePath: task.filePath, taskText: task.text) {
+        
+        // First try to find an existing reminder by ID mapping
+        if let mapping = mappingStore.findMapping(obsidianId: task.id) {
+            print("Found mapping by Obsidian ID: \(task.id)")
             reminder = existingReminders.first { $0.calendarItemIdentifier == mapping.reminderId }
         }
         
+        // If no reminder found by ID, create a new one
         if reminder == nil {
-            reminder = existingReminders.first { !$0.isCompleted && $0.title == "\(task.text) 🔗 \(task.filePath)" }
-        }
-        
-        if reminder == nil {
+            print("Creating new reminder for task ID: \(task.id)")
             reminder = EKReminder(eventStore: eventStore)
             reminder?.calendar = targetCalendar
         }
@@ -474,13 +487,15 @@ public func syncTasksFromVault(tasks: [ObsidianTask], eventStore: EKEventStore) 
             reminder.dueDateComponents = Calendar.current.dateComponents([.year, .month, .day], from: dueDate)
         }
         
+        // Store the Obsidian ID in the notes
         var notes = [String]()
         notes.append("obsidian://open?vault=\(task.vaultPath.components(separatedBy: "/").last ?? "")&file=\(task.filePath)")
-        notes.append("ID: \(task.id)") // Add ID in a structured format
+        notes.append("ID: \(task.id)")
         reminder.notes = notes.joined(separator: "\n")
         
         try eventStore.save(reminder, commit: false)
         
+        // Create or update mapping using IDs
         let newMapping = TaskMapping(
             obsidianId: task.id,
             reminderId: reminder.calendarItemIdentifier,
@@ -488,9 +503,11 @@ public func syncTasksFromVault(tasks: [ObsidianTask], eventStore: EKEventStore) 
             taskText: task.text
         )
         
-        if let existingIndex = mappingStore.mappings.firstIndex(where: { $0.signature == newMapping.signature }) {
+        if let existingIndex = mappingStore.mappings.firstIndex(where: { $0.obsidianId == task.id }) {
+            print("Updating existing mapping for task ID: \(task.id)")
             mappingStore.mappings[existingIndex] = newMapping
         } else {
+            print("Creating new mapping for task ID: \(task.id)")
             mappingStore.mappings.append(newMapping)
         }
     }
@@ -538,12 +555,22 @@ public func syncObsidianCompletedTasks(tasks: [ObsidianTask], eventStore: EKEven
 }
 
 public func syncCompletedReminders(eventStore: EKEventStore, vaultPath: String) async throws {
+    print("Getting calendar for vault: \(vaultPath)")
     let targetCalendar = try getOrCreateVaultCalendar(for: vaultPath, eventStore: eventStore)
     
-    let mappingStore = try loadTaskMappings(vaultPath: vaultPath)
+    // 1. Get all tasks from Obsidian and save to JSON
+    print("Finding all tasks in Obsidian...")
+    let allTasks = try findAllTasks(in: vaultPath)
+    let taskStates = allTasks.map { TaskState(id: $0.id, text: $0.text, filePath: $0.filePath, isCompleted: $0.isCompleted) }
+    let tasksJsonPath = (vaultPath as NSString).appendingPathComponent("._VaultTasks.json")
+    let taskData = try JSONEncoder().encode(taskStates)
+    try taskData.write(to: URL(fileURLWithPath: tasksJsonPath))
+    print("Saved \(taskStates.count) tasks to \(tasksJsonPath)")
     
-    let predicate = eventStore.predicateForCompletedReminders(withCompletionDateStarting: nil, ending: nil, calendars: [targetCalendar])
-    let completedReminders = try await withCheckedThrowingContinuation { continuation in
+    // 2. Get all reminders and save to JSON
+    print("Getting reminders...")
+    let predicate = eventStore.predicateForReminders(in: [targetCalendar])
+    let reminders = try await withCheckedThrowingContinuation { continuation in
         eventStore.fetchReminders(matching: predicate) { reminders in
             if let reminders = reminders {
                 continuation.resume(returning: reminders)
@@ -557,35 +584,290 @@ public func syncCompletedReminders(eventStore: EKEventStore, vaultPath: String) 
         }
     }
     
-    for reminder in completedReminders {
-        if let mapping = mappingStore.findMapping(reminderId: reminder.calendarItemIdentifier) {
-            let filePath = (vaultPath as NSString).appendingPathComponent(mapping.filePath)
+    let reminderStates = reminders.map { reminder in
+        ReminderState(
+            id: reminder.calendarItemIdentifier,
+            text: reminder.title ?? "",
+            isCompleted: reminder.isCompleted
+        )
+    }
+    let remindersJsonPath = (vaultPath as NSString).appendingPathComponent("._Reminders.json")
+    let reminderData = try JSONEncoder().encode(reminderStates)
+    try reminderData.write(to: URL(fileURLWithPath: remindersJsonPath))
+    print("Saved \(reminderStates.count) reminders to \(remindersJsonPath)")
+    
+    // 3. Load mappings
+    let mappingStore = try loadTaskMappings(vaultPath: vaultPath)
+    var fileChanges: [String: String] = [:]
+    
+    // 4. Compare and sync completion status
+    print("Comparing completion status...")
+    for mapping in mappingStore.mappings {
+        // Find corresponding task and reminder by their IDs
+        let task = allTasks.first { task in 
+            print("Comparing task - Mapping ID: '\(mapping.obsidianId)', Task ID: '\(task.id)'")
+            return task.id == mapping.obsidianId
+        }
+        
+        let reminder = reminders.first { reminder in
+            print("Comparing reminder - Mapping ID: '\(mapping.reminderId)', Reminder ID: '\(reminder.calendarItemIdentifier)'")
+            return reminder.calendarItemIdentifier == mapping.reminderId
+        }
+        
+        if task == nil {
+            print("Warning: Could not find matching task for mapping ID: '\(mapping.obsidianId)'")
+            continue
+        }
+        
+        if reminder == nil {
+            print("Warning: Could not find matching reminder for mapping ID: '\(mapping.reminderId)'")
+            continue
+        }
+        
+        guard let task = task, let reminder = reminder else { continue }
+        
+        // If either is completed, mark both as completed
+        let shouldBeCompleted = task.isCompleted || reminder.isCompleted
+        print("Task ID '\(task.id)' - Obsidian: \(task.isCompleted), Reminder: \(reminder.isCompleted) -> Should be: \(shouldBeCompleted)")
+        
+        // Update reminder if needed
+        if reminder.isCompleted != shouldBeCompleted {
+            print("Updating reminder completion status to \(shouldBeCompleted)")
+            reminder.isCompleted = shouldBeCompleted
+            try eventStore.save(reminder, commit: true)
+        }
+        
+        // Update Obsidian task if needed
+        if task.isCompleted != shouldBeCompleted {
+            print("Updating Obsidian task completion status to \(shouldBeCompleted)")
+            let filePath = task.filePath
             
-            if FileManager.default.fileExists(atPath: filePath) {
-                let content = try String(contentsOfFile: filePath, encoding: .utf8)
-                var lines = content.components(separatedBy: .newlines)
+            // Load file content if needed
+            if fileChanges[filePath] == nil {
+                guard FileManager.default.fileExists(atPath: filePath) else {
+                    print("Warning: File does not exist: \(filePath)")
+                    continue
+                }
+                fileChanges[filePath] = try String(contentsOfFile: filePath, encoding: .utf8)
+            }
+            
+            if var content = fileChanges[filePath] {
+                let lines = content.components(separatedBy: CharacterSet.newlines)
+                var updatedLines = [String]()
+                var foundTask = false
                 
-                for (index, line) in lines.enumerated() {
-                    var currentLine = line
-                    
-                    // Check if this line contains our obsidianId (in either format)
-                    if line.contains("^\(mapping.obsidianId)") || line.contains("<!-- id: \(mapping.obsidianId) -->") {
-                        if line.contains("- [ ]") {
-                            currentLine = line.replacingOccurrences(of: "- [ ]", with: "- [x]")
+                for line in lines {
+                    if line.contains(task.text) {
+                        let currentStatus = line.hasPrefix("- [x]") || line.hasPrefix("- [X]")
+                        if currentStatus != shouldBeCompleted {
+                            print("Updating task in file")
+                            let updatedLine = shouldBeCompleted ?
+                                line.replacingOccurrences(of: "- [ ]", with: "- [x]") :
+                                line.replacingOccurrences(of: "- [x]", with: "- [ ]").replacingOccurrences(of: "- [X]", with: "- [ ]")
+                            updatedLines.append(updatedLine)
+                            foundTask = true
+                        } else {
+                            updatedLines.append(line)
                         }
+                    } else {
+                        updatedLines.append(line)
                     }
-                    
-                    lines[index] = currentLine
                 }
                 
-                let updatedContent = lines.joined(separator: "\n")
-                try updatedContent.write(to: URL(fileURLWithPath: filePath), atomically: true, encoding: .utf8)
+                if foundTask {
+                    content = updatedLines.joined(separator: "\n")
+                    fileChanges[filePath] = content
+                    print("Updated content in memory for file: \(filePath)")
+                } else {
+                    print("Warning: Could not find task line in file: \(filePath)")
+                }
             }
         }
     }
     
-    // Save the mapping store after processing all reminders
-    try saveTaskMappings(mappingStore, vaultPath: vaultPath)
+    // Write all file changes
+    print("Writing file changes...")
+    for (filePath, content) in fileChanges {
+        print("Writing changes to file: \(filePath)")
+        try content.write(toFile: filePath, atomically: true, encoding: .utf8)
+    }
+    
+    print("Sync completed!")
+}
+
+public func findAllTasks(in vaultPath: String) throws -> [ObsidianTask] {
+    var tasks: [ObsidianTask] = []
+    let fileManager = FileManager.default
+    let enumerator = fileManager.enumerator(
+        at: URL(fileURLWithPath: vaultPath),
+        includingPropertiesForKeys: [.isRegularFileKey],
+        options: [.skipsHiddenFiles]
+    )
+    
+    let taskRegex = try NSRegularExpression(pattern: "- \\[([xX ])\\] (.+?)(?:\\s*(?:\\^([A-Z0-9-]+)|<!-- id: ([A-Z0-9-]+) -->))?$", options: .anchorsMatchLines)
+    
+    while let fileURL = enumerator?.nextObject() as? URL {
+        guard fileURL.pathExtension == "md",
+              fileURL.lastPathComponent != "_AppleReminders.md",
+              !fileURL.lastPathComponent.hasPrefix("._") else {
+            continue
+        }
+        
+        let content = try String(contentsOf: fileURL, encoding: .utf8)
+        let lines = content.components(separatedBy: .newlines)
+        
+        for line in lines {
+            let range = NSRange(line.startIndex..., in: line)
+            if let match = taskRegex.firstMatch(in: line, range: range),
+               let statusRange = Range(match.range(at: 1), in: line),
+               let taskRange = Range(match.range(at: 2), in: line) {
+                let status = String(line[statusRange])
+                let taskText = String(line[taskRange])
+                let isCompleted = status.trimmingCharacters(in: .whitespaces).lowercased() == "x"
+                
+                var obsidianId = ""
+                if let idRange = Range(match.range(at: 3), in: line) {
+                    obsidianId = String(line[idRange])
+                } else if let idRange = Range(match.range(at: 4), in: line) {
+                    obsidianId = String(line[idRange])
+                }
+                
+                let task = ObsidianTask(
+                    id: obsidianId.isEmpty ? UUID().uuidString : obsidianId,
+                    text: taskText.trimmingCharacters(in: .whitespaces),
+                    dueDate: nil,  // We'll parse due dates in a future update
+                    filePath: fileURL.path,
+                    vaultPath: vaultPath,
+                    isCompleted: isCompleted
+                )
+                tasks.append(task)
+            }
+        }
+    }
+    
+    return tasks
+}
+
+public func syncCompletedReminders(tasks: [ObsidianTask], reminders: [EKReminder], eventStore: EKEventStore) throws {
+    var fileChanges: [String: String] = [:] // Track changes per file
+    
+    guard let vaultPath = tasks.first?.vaultPath else {
+        print("No tasks found, skipping sync")
+        return
+    }
+    
+    print("Syncing completed reminders for vault: \(vaultPath)")  // Debug log
+    let mappingStore = try loadTaskMappings(vaultPath: vaultPath)
+    
+    // First, build a map of completion status from both systems
+    var completionStatus: [String: (obsidianCompleted: Bool, reminderCompleted: Bool)] = [:]
+    
+    // Check Obsidian tasks
+    for task in tasks {
+        if let mapping = mappingStore.findMapping(filePath: task.filePath, taskText: task.text) {
+            completionStatus[mapping.reminderId] = (obsidianCompleted: task.isCompleted, reminderCompleted: false)
+        }
+    }
+    
+    // Check Reminders
+    for reminder in reminders {
+        if var status = completionStatus[reminder.calendarItemIdentifier] {
+            status.reminderCompleted = reminder.isCompleted
+            completionStatus[reminder.calendarItemIdentifier] = status
+        }
+    }
+    
+    // Now sync based on the combined status
+    for (reminderId, status) in completionStatus {
+        let shouldBeCompleted = status.obsidianCompleted || status.reminderCompleted
+        
+        // Update Reminder if needed
+        if let reminder = reminders.first(where: { $0.calendarItemIdentifier == reminderId }) {
+            if reminder.isCompleted != shouldBeCompleted {
+                print("Updating reminder completion status: \(reminder.title ?? "Untitled") to \(shouldBeCompleted)") // Debug log
+                reminder.isCompleted = shouldBeCompleted
+                try eventStore.save(reminder, commit: true)
+            }
+        }
+        
+        // Update Obsidian if needed
+        if let mapping = mappingStore.findMappingByReminderId(reminderId),
+           let task = tasks.first(where: { $0.filePath == mapping.filePath && $0.text == mapping.taskText }) {
+            if task.isCompleted != shouldBeCompleted {
+                print("Updating Obsidian task completion status: \(task.text) to \(shouldBeCompleted)") // Debug log
+                let filePath = task.filePath
+                
+                // Load file content if needed
+                if fileChanges[filePath] == nil {
+                    guard FileManager.default.fileExists(atPath: filePath) else {
+                        print("Warning: File does not exist: \(filePath)") // Debug log
+                        continue
+                    }
+                    fileChanges[filePath] = try String(contentsOfFile: filePath, encoding: .utf8)
+                }
+                
+                // Update the task status in the file
+                if var content = fileChanges[filePath] {
+                    let lines = content.components(separatedBy: CharacterSet.newlines)
+                    var updatedLines = [String]()
+                    var foundTask = false
+                    
+                    for line in lines {
+                        if line.contains(mapping.taskText) {
+                            let currentStatus = line.hasPrefix("- [x]") || line.hasPrefix("- [X]")
+                            if currentStatus != shouldBeCompleted {
+                                print("Updating task in file") // Debug log
+                                let updatedLine = shouldBeCompleted ?
+                                    line.replacingOccurrences(of: "- [ ]", with: "- [x]") :
+                                    line.replacingOccurrences(of: "- [x]", with: "- [ ]").replacingOccurrences(of: "- [X]", with: "- [ ]")
+                                updatedLines.append(updatedLine)
+                                foundTask = true
+                            } else {
+                                updatedLines.append(line)
+                            }
+                        } else {
+                            updatedLines.append(line)
+                        }
+                    }
+                    
+                    if foundTask {
+                        content = updatedLines.joined(separator: "\n")
+                        fileChanges[filePath] = content
+                    }
+                }
+            }
+        }
+    }
+    
+    // Write all file changes
+    for (filePath, content) in fileChanges {
+        print("Writing changes to file: \(filePath)") // Debug log
+        try content.write(toFile: filePath, atomically: true, encoding: .utf8)
+    }
+}
+
+public func getOrCreateVaultCalendar(for vaultPath: String, eventStore: EKEventStore) throws -> EKCalendar {
+    let vaultName = URL(fileURLWithPath: vaultPath).lastPathComponent
+    if let calendar = eventStore.calendars(for: .reminder).first(where: { $0.title == vaultName }) {
+        return calendar
+    } else {
+        let newCalendar = EKCalendar(for: .reminder, eventStore: eventStore)
+        newCalendar.title = vaultName
+        
+        // Choose a source. Use the default if available; otherwise, pick the first local source.
+        if let defaultSource = eventStore.defaultCalendarForNewReminders()?.source {
+            newCalendar.source = defaultSource
+        } else if let localSource = eventStore.sources.first(where: { $0.sourceType == .local }) {
+            newCalendar.source = localSource
+        } else {
+            throw NSError(domain: "RemindersSync",
+                          code: 2,
+                          userInfo: [NSLocalizedDescriptionKey: "No valid Reminder source found"])
+        }
+        
+        try eventStore.saveCalendar(newCalendar, commit: true)
+        return newCalendar
+    }
 }
 
 public func requestRemindersAccess(eventStore: EKEventStore) async throws {
@@ -621,12 +903,16 @@ public func exportRemindersToMarkdown(excludeLists: Set<String>, eventStore: EKE
                 if let reminders = reminders {
                     continuation.resume(returning: reminders)
                 } else {
-                    continuation.resume(throwing: NSError(domain: "RemindersSync", code: 3, userInfo: [NSLocalizedDescriptionKey: "Failed to fetch reminders"]))
+                    continuation.resume(throwing: NSError(
+                        domain: "RemindersSync",
+                        code: 3,
+                        userInfo: [NSLocalizedDescriptionKey: "Failed to fetch reminders"]
+                    ))
                 }
             }
         }
         
-        let incompleteReminders = reminders.filter { !($0.isCompleted) }
+        let incompleteReminders = reminders.filter { !$0.isCompleted }
         
         if !incompleteReminders.isEmpty {
             markdownContent += "\n### \(calendar.title)\n"
@@ -729,21 +1015,6 @@ public func cleanupTaskIds(in vaultPath: String) throws {
     }
 }
 
-public func saveTaskMappings(_ store: TaskMappingStore, vaultPath: String) throws {
-    let mappingFile = (vaultPath as NSString).appendingPathComponent("._RemindersMapping.json")
-    do {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        let data = try encoder.encode(store)
-        try data.write(to: URL(fileURLWithPath: mappingFile), options: .atomic)
-    } catch {
-        print("Warning: Failed to save mapping file. Error: \(error.localizedDescription)")
-        throw error
-    }
-}
-
-// Add these new functions near the top, after the existing structs
-
 public func ensureMappingFileOrCleanup(in vaultPath: String) throws {
     let mappingPath = (vaultPath as NSString).appendingPathComponent("._RemindersMapping.json")
     if !FileManager.default.fileExists(atPath: mappingPath) {
@@ -757,4 +1028,18 @@ public func initializeEventStore() async throws -> (EKEventStore, CLIOptions) {
     let eventStore = EKEventStore()
     try await requestRemindersAccess(eventStore: eventStore)
     return (eventStore, options)
-} 
+}
+
+// Task and Reminder state structs for JSON
+struct TaskState: Codable {
+    let id: String
+    let text: String
+    let filePath: String
+    let isCompleted: Bool
+}
+
+struct ReminderState: Codable {
+    let id: String
+    let text: String
+    let isCompleted: Bool
+}

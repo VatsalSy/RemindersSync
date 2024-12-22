@@ -13,8 +13,6 @@ struct RemindersSyncCLI {
 
             // 1. Handle completed tasks in both directions
             print("Syncing completed tasks...")
-            let completedTasks = try findCompletedTasks(in: options.vaultPath)
-            try await syncObsidianCompletedTasks(tasks: completedTasks, eventStore: eventStore)
             try await syncCompletedReminders(eventStore: eventStore, vaultPath: options.vaultPath)
 
             // 2. Scan vault and sync tasks to Apple Reminders
