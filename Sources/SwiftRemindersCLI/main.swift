@@ -26,22 +26,6 @@ struct RemindersSyncCLI {
             let tasks = try findIncompleteTasks(in: options.vaultPath)
             try await syncTasksFromVault(tasks: tasks, eventStore: eventStore)
 
-            // 3. Export other reminders to markdown
-            print("Exporting other reminders...")
-            let vaultName = URL(fileURLWithPath: options.vaultPath).lastPathComponent
-            var excludedLists: Set<String> = [
-                "Groceries",
-                "Shopping",
-                "Cooking-HouseHold"
-            ]
-            excludedLists.insert(vaultName)
-
-            try await exportRemindersToMarkdown(
-                excludeLists: excludedLists,
-                eventStore: eventStore,
-                outputPath: options.outputPath
-            )
-            
             print("Sync completed successfully!")
         } catch {
             print("Error: \(error.localizedDescription)")

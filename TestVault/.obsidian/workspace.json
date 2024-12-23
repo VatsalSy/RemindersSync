@@ -4,21 +4,17 @@
     "type": "split",
     "children": [
       {
-        "id": "492e5c3d61b44fae",
+        "id": "e89e0954bffc7af6",
         "type": "tabs",
         "children": [
           {
-            "id": "cbaae33506cb1742",
+            "id": "6634a7b7a99bad6c",
             "type": "leaf",
             "state": {
-              "type": "markdown",
-              "state": {
-                "file": "Testreminder.md",
-                "mode": "source",
-                "source": false
-              },
+              "type": "empty",
+              "state": {},
               "icon": "lucide-file",
-              "title": "Testreminder"
+              "title": "New tab"
             }
           }
         ]
@@ -93,7 +89,6 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "Testreminder.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -103,7 +98,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for Testreminder"
+              "title": "Backlinks"
             }
           },
           {
@@ -149,7 +144,8 @@
       }
     ],
     "direction": "horizontal",
-    "width": 300
+    "width": 300,
+    "collapsed": true
   },
   "left-ribbon": {
     "hiddenItems": {
@@ -161,11 +157,11 @@
       "command-palette:Open command palette": false
     }
   },
-  "active": "cbaae33506cb1742",
+  "active": "6634a7b7a99bad6c",
   "lastOpenFiles": [
-    "Testreminder.md",
+    "testing 2nd reminder.md",
     "_AppleReminders.md",
-    "today.md",
-    "testing 2nd reminder.md"
+    "Testreminder.md",
+    "today.md"
   ]
 }

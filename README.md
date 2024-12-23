@@ -1,12 +1,14 @@
 # RemindersSync
 
-A Swift-based tool to sync Obsidian tasks with Apple Reminders. Tasks are synced bidirectionally, meaning tasks marked as completed in either system will be reflected in the other.
+A Swift-based tool to sync Obsidian tasks with Apple Reminders. Tasks are synced bidirectionally between your Obsidian vault and a dedicated Apple Reminders list (with the same name as your vault).
 
 ## Features
 
 - Bidirectional sync of tasks between Obsidian and Apple Reminders
+  - Only syncs with the Apple Reminders list that matches your vault name
+  - Does not affect tasks in other Reminders lists
+  - Does not sync tasks found in `_AppleReminders.md`
 - Maintains task completion status across both systems
-- Exports non-synced reminders to a markdown file
 - Preserves task IDs and mappings between systems
 - Handles task due dates
 
@@ -14,46 +16,149 @@ A Swift-based tool to sync Obsidian tasks with Apple Reminders. Tasks are synced
 
 The package includes three command-line tools:
 
-1. **RemindersSync**: Full two-way sync (recommended)
-   - Syncs tasks from Obsidian to Reminders
+1. **RemindersSync**: Full two-way sync between vault tasks and vault-named list
+   - Syncs tasks between Obsidian and a dedicated Reminders list (named same as vault)
    - Syncs completion status both ways
-   - Exports other reminders to markdown
+   - Only affects tasks in your vault, not those in `_AppleReminders.md`
+   - Preserves task IDs and mappings between systems
    ```bash
    swift run RemindersSync /path/to/vault
    ```
 
-2. **ScanVaultCLI**: One-way sync from Obsidian to Reminders
+2. **ScanVault**: One-way sync from Obsidian to Reminders
    - Only syncs tasks from Obsidian to Reminders
-   - Does not sync completion status
-   - Does not export other reminders
+   - Does not sync completion status back to Obsidian
+   - Creates tasks in the vault-named list in Apple Reminders
    ```bash
-   swift run ScanVaultCLI /path/to/vault
+   swift run ScanVault /path/to/vault
    ```
 
-3. **ExportOtherRemindersCLI**: Export non-synced reminders
-   - Exports reminders to `_AppleReminders.md`
-   - Does not sync tasks
+3. **ExportOtherReminders**: Two-way sync for non-vault reminders
+   - Syncs tasks between `_AppleReminders.md` and Apple Reminders (excluding vault list)
+   - Maintains two-way completion status sync
+   - Auto-creates tasks in Inbox for new entries without IDs
+   - Preserves list organization and due dates
+   - Handles task consolidation and ID management
    ```bash
-   swift run ExportOtherRemindersCLI /path/to/vault
+   # Regular sync
+   swift run ExportOtherReminders /path/to/vault
+
+   # Clean up IDs (if needed)
+   swift run ExportOtherReminders /path/to/vault --cleanup
+
+   # Get help with options
+   swift run ExportOtherReminders --help
    ```
 
-## How it Works
+### ExportOtherReminders Details
 
-The sync process works in three main steps:
+The `ExportOtherReminders` tool provides a robust sync between Apple Reminders and a markdown file:
 
-1. **Task State Management**:
-   - Scans Obsidian vault for tasks and saves their state to `._VaultTasks.json`
-   - Fetches Apple Reminders and saves their state to `._Reminders.json`
-   - Uses `._RemindersMapping.json` to maintain mappings between Obsidian tasks and Apple Reminders
+#### Features
+- Two-way completion status sync
+- Preserves task organization by list
+- Maintains unique IDs for reliable syncing
+- Handles both new and existing tasks
+- Cleans up duplicate entries
+- Auto-creates tasks in Inbox for new entries without IDs
 
-2. **Completion Status Sync** (RemindersSync only):
-   - Compares task completion status in both systems
-   - If a task is marked as completed in either system, it's marked as completed in both
-   - Uses unique IDs to ensure reliable task matching
+#### Task Creation Behavior
+- New tasks added to `_AppleReminders.md` without IDs:
+  - Automatically created in Apple Reminders' Inbox
+  - Removed from the markdown file after creation
+  - Will reappear in markdown with proper ID after next sync
+- New tasks with IDs:
+  - Synced bidirectionally between systems
+  - Maintain their list organization
 
-3. **Other Reminders Export** (RemindersSync and ExportOtherRemindersCLI):
-   - Exports reminders from non-synced lists to `_AppleReminders.md`
-   - Excludes certain lists (e.g., "Groceries", "Shopping")
+#### Excluded Lists
+By default, the following lists are excluded from sync:
+- Groceries
+- Cooking-HouseHold
+- obsidian
+- Your vault name (to avoid conflicts with RemindersSync)
+
+#### File Structure
+- `_AppleReminders.md`: Main file containing all synced tasks
+  - Organized by sections using `## List Name` headers
+  - Each task includes a unique ID: `- [ ] Task text ^UUID`
+  - Tasks without a section go to "Inbox"
+  - Supports due dates with YYYY-MM-DD format
+
+#### State Files
+- `._TaskDB.json`: Current state of all tasks with their metadata
+- `._ConsolidatedIds.json`: Mapping of task titles to their consolidated IDs
+
+#### Usage Examples
+
+1. Regular sync:
+```bash
+swift run ExportOtherReminders /path/to/vault
+```
+
+2. Clean up IDs (if you have duplicates):
+```bash
+swift run ExportOtherReminders /path/to/vault --cleanup
+```
+
+3. Get help:
+```bash
+swift run ExportOtherReminders --help
+```
+
+#### How It Works
+
+1. **Initial Processing**:
+   - Scans `_AppleReminders.md` for tasks without IDs
+   - Creates these tasks in Apple Reminders' Inbox
+   - Removes them from the markdown file
+
+2. **Main Sync**:
+   - Scans all remaining tasks in both systems
+   - Syncs completion status bidirectionally
+   - Maintains list organization
+   - Preserves due dates
+
+3. **Task Organization**:
+   - Tasks are organized by their list in Apple Reminders
+   - Tasks from `_AppleReminders.md` maintain their section headers
+   - New tasks without a list go to "Inbox"
+
+4. **ID Management**:
+   - Each task has a unique UUID
+   - IDs are stored in Apple Reminders notes field
+   - IDs are preserved in markdown using the `^UUID` format
+   - Consolidated IDs prevent duplicates
+
+#### Best Practices
+
+1. Run `--cleanup` if you notice duplicate tasks
+2. Let the tool manage the `_AppleReminders.md` file structure
+3. Use list names in Apple Reminders to organize tasks
+4. Don't manually edit task IDs
+5. For new tasks in markdown, just add them without IDs - they'll be properly processed
+
+## State Files
+
+The tools maintain several state files in your vault:
+
+### RemindersSync Files:
+- `._VaultTasks.json`: Current state of all tasks in your Obsidian vault
+- `._Reminders.json`: Current state of reminders from your vault's list in Apple Reminders
+- `._RemindersMapping.json`: Mappings between Obsidian task IDs and Apple Reminder IDs
+
+### ExportOtherReminders Files:
+- `._RemindersDB.json`: State of all Apple Reminders with their IDs
+- `._LocalDB.json`: State of tasks from `_AppleReminders.md`
+- `_AppleReminders.md`: Tasks synced with Apple Reminders (outside vault-named list)
+
+## Notes
+
+- Both tools require permission to access Apple Reminders
+- Task IDs are preserved across syncs using the mapping files
+- Files starting with `._` in your vault are used for state management
+- RemindersSync only interacts with the Apple Reminders list that matches your vault name
+- ExportOtherReminders handles all other reminders through `_AppleReminders.md`
 
 ## Installation
 
@@ -70,8 +175,8 @@ cd RemindersSync
 2. Run any of the commands directly with Swift:
 ```bash
 swift run RemindersSync /path/to/vault            # Full two-way sync
-swift run ScanVaultCLI /path/to/vault            # One-way sync
-swift run ExportOtherRemindersCLI /path/to/vault # Export only
+swift run ScanVault /path/to/vault            # One-way sync
+swift run ExportOtherReminders /path/to/vault # Export only
 ```
 
 ### Method 2: System Installation
@@ -88,8 +193,8 @@ swift build -c release
 ```bash
 sudo mkdir -p /usr/local/bin
 sudo cp .build/release/RemindersSync /usr/local/bin/obsidian-reminders
-sudo cp .build/release/ScanVaultCLI /usr/local/bin/obsidian-scan
-sudo cp .build/release/ExportOtherRemindersCLI /usr/local/bin/obsidian-export
+sudo cp .build/release/ScanVault /usr/local/bin/obsidian-scan
+sudo cp .build/release/ExportOtherReminders /usr/local/bin/obsidian-export
 ```
 
 3. Make them executable:
@@ -166,28 +271,3 @@ If the sync isn't working:
 1. Check the console output for error messages
 2. Verify the vault path is correct
 3. Ensure your markdown files have the correct task format: `- [ ] Task text`
-
-## State Files
-
-The tool maintains several state files in your vault:
-
-- `._VaultTasks.json`: Current state of all tasks in your Obsidian vault
-- `._Reminders.json`: Current state of relevant reminders from Apple Reminders
-- `._RemindersMapping.json`: Mappings between Obsidian task IDs and Apple Reminder IDs
-- `_AppleReminders.md`: Exported non-synced reminders
-
-These files help maintain sync state and ensure reliable task matching between systems.
-
-## Excluded Lists
-
-By default, the following reminder lists are excluded from syncing:
-- Groceries
-- Shopping
-- Cooking-HouseHold
-- Your vault name (to avoid circular syncs)
-
-## Notes
-
-- The tool requires permission to access Apple Reminders
-- Task IDs are preserved across syncs using the mapping file
-- Files starting with `._` in your vault are used for state management
