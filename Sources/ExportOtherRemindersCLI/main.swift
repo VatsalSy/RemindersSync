@@ -10,12 +10,92 @@ struct ExportOtherRemindersCLI {
             "Groceries",
             "Shopping",
             "Cooking-HouseHold",
+            "Things to do",
+            "Anjali Vatsal",
+            "Papers To Read",
+            "Books To Read",
+            "Movies/TV Shows to Watch",
+            "Books to listen (Anjali)",
+            "Family",
+            "Future shopping list",
+            "Anjali internship tasks",
+            "India trip shopping list",
+            "Sonali Credit card",
             "obsidian"  // Always exclude obsidian list
         ]
         // Add vault name to excluded lists
         let vaultName = URL(fileURLWithPath: vaultPath).lastPathComponent
         excludedLists.insert(vaultName)
         return excludedLists
+    }
+    
+    // Add new function to manage consolidated ID database
+    static func loadConsolidatedIds(vaultPath: String) throws -> [String: String] {
+        let consolidatedDBPath = (vaultPath as NSString).appendingPathComponent("._ConsolidatedIds.json")
+        if FileManager.default.fileExists(atPath: consolidatedDBPath),
+           let data = try? Data(contentsOf: URL(fileURLWithPath: consolidatedDBPath)),
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: String] {
+            return json
+        }
+        return [:]
+    }
+    
+    static func saveConsolidatedIds(_ ids: [String: String], vaultPath: String) throws {
+        let consolidatedDBPath = (vaultPath as NSString).appendingPathComponent("._ConsolidatedIds.json")
+        let data = try JSONSerialization.data(withJSONObject: ids)
+        try data.write(to: URL(fileURLWithPath: consolidatedDBPath))
+    }
+    
+    static func updateConsolidatedIds(
+        remindersDB: [String: [String: Any]],
+        localDB: [String: [String: Any]],
+        vaultPath: String
+    ) throws -> [String: String] {
+        var consolidatedIds = try loadConsolidatedIds(vaultPath: vaultPath)
+        
+        // Helper function to get title from task
+        func getTitle(from task: [String: Any]) -> String {
+            return task["title"] as? String ?? ""
+        }
+        
+        // First, process reminders DB
+        for (id, task) in remindersDB {
+            let title = getTitle(from: task)
+            let normalizedId = normalizeId(id)
+            
+            if let existingId = consolidatedIds[title] {
+                // If we have a different ID for this title, use the consolidated one
+                if normalizedId != normalizeId(existingId) {
+                    print("ID mismatch for '\(title)':")
+                    print("  Reminders DB ID: \(id)")
+                    print("  Consolidated ID: \(existingId)")
+                }
+            } else {
+                consolidatedIds[title] = id
+            }
+        }
+        
+        // Then process local DB
+        for (id, task) in localDB {
+            let title = getTitle(from: task)
+            let normalizedId = normalizeId(id)
+            
+            if let existingId = consolidatedIds[title] {
+                // If we have a different ID for this title, use the consolidated one
+                if normalizedId != normalizeId(existingId) {
+                    print("ID mismatch for '\(title)':")
+                    print("  Local DB ID: \(id)")
+                    print("  Consolidated ID: \(existingId)")
+                }
+            } else {
+                consolidatedIds[title] = id
+            }
+        }
+        
+        // Save the consolidated IDs
+        try saveConsolidatedIds(consolidatedIds, vaultPath: vaultPath)
+        
+        return consolidatedIds
     }
     
     static func main() async {
@@ -56,34 +136,12 @@ struct ExportOtherRemindersCLI {
                 return
             }
             
-            // Regular sync process
-            // 1. Scan Apple Reminders and save to JSON
-            print("Scanning Apple Reminders...")
-            let remindersDBPath = (vaultPath as NSString).appendingPathComponent("._RemindersDB.json")
-            let remindersDB = try await scanAppleReminders(
-                eventStore: eventStore,
-                remindersDBPath: remindersDBPath,
-                vaultPath: vaultPath
-            )
+            // Print excluded lists
+            let excludedLists = getExcludedLists(vaultPath: vaultPath)
+            print("\nExcluded lists:", excludedLists)
             
-            // 2. Scan _AppleReminders.md and save to JSON
-            print("Scanning _AppleReminders.md...")
-            let localDBPath = (vaultPath as NSString).appendingPathComponent("._LocalDB.json")
-            let localDB = try scanLocalTasks(
-                vaultPath: vaultPath,
-                localDBPath: localDBPath
-            )
-            
-            // 3. Compare and sync completion status
-            print("Syncing completion status...")
-            try await syncCompletionStatus(
-                remindersDB: remindersDB,
-                localDB: localDB,
-                eventStore: eventStore,
-                vaultPath: vaultPath,
-                remindersDBPath: remindersDBPath,
-                localDBPath: localDBPath
-            )
+            // Perform sync
+            try await syncTasks(eventStore: eventStore, vaultPath: vaultPath)
             
             print("Sync completed successfully!")
         } catch {
@@ -93,85 +151,185 @@ struct ExportOtherRemindersCLI {
     }
     
     static func normalizeId(_ id: String) -> String {
-        // Remove any carets from the ID
+        // Remove any carets and spaces from the ID and convert to uppercase
         return id.replacingOccurrences(of: "^", with: "")
+            .replacingOccurrences(of: " ", with: "")
+            .uppercased()
+    }
+    
+    static func formatIdForNotes(_ id: String) -> String {
+        return "\nID: " + id
+    }
+    
+    static func formatIdForMarkdown(_ id: String) -> String {
+        return " ^" + id
+    }
+    
+    static func extractIdFromNotes(_ text: String) -> String? {
+        // Try ID: format first
+        if let idRange = text.range(of: "ID:\\s*([A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12})", options: .regularExpression) {
+            // Extract just the UUID part after "ID:"
+            let idText = String(text[idRange])
+            if let uuidRange = idText.range(of: "[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}", options: .regularExpression) {
+                return String(idText[uuidRange])
+            }
+        }
+        
+        // Then try caret format as fallback
+        if let idRange = text.range(of: "\\^([A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12})", options: .regularExpression) {
+            return String(text[text.index(after: idRange.lowerBound)..<idRange.upperBound])
+        }
+        
+        return nil
+    }
+    
+    static func removeIdFromNotes(_ text: String) -> String {
+        // Remove ID: format
+        var result = text.replacing(try! Regex("\\s*ID:\\s*[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\\s*"), with: "")
+        
+        // Also remove any caret format IDs (for cleanup)
+        result = result.replacing(try! Regex("\\s*\\^+[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\\s*"), with: "")
+        
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    
+    // Add new type to track task status
+    struct TaskStatus {
+        let isComplete: Bool
+        let title: String
+        let dueDate: String
+        let parentList: String
+        let notes: String
+    }
+    
+    static func loadTaskDatabase(vaultPath: String) throws -> [String: TaskStatus] {
+        let dbPath = (vaultPath as NSString).appendingPathComponent("._TaskDB.json")
+        if FileManager.default.fileExists(atPath: dbPath),
+           let data = try? Data(contentsOf: URL(fileURLWithPath: dbPath)),
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: [String: Any]] {
+            return json.compactMapValues { dict in
+                guard let title = dict["title"] as? String,
+                      let isComplete = dict["completed"] as? Bool,
+                      let parentList = dict["parentList"] as? String
+                else { return nil }
+                return TaskStatus(
+                    isComplete: isComplete,
+                    title: title,
+                    dueDate: dict["dueDate"] as? String ?? "",
+                    parentList: parentList,
+                    notes: dict["notes"] as? String ?? ""
+                )
+            }
+        }
+        return [:]
+    }
+    
+    static func saveTaskDatabase(_ tasks: [String: TaskStatus], vaultPath: String) throws {
+        let dbPath = (vaultPath as NSString).appendingPathComponent("._TaskDB.json")
+        let json = tasks.mapValues { status in
+            return [
+                "title": status.title,
+                "completed": status.isComplete,
+                "dueDate": status.dueDate,
+                "parentList": status.parentList,
+                "notes": status.notes
+            ]
+        }
+        let data = try JSONSerialization.data(withJSONObject: json)
+        try data.write(to: URL(fileURLWithPath: dbPath))
+    }
+    
+    static func scanMarkdownTasks(vaultPath: String) throws -> [String: TaskStatus] {
+        var tasks: [String: TaskStatus] = [:]
+        let mdPath = (vaultPath as NSString).appendingPathComponent("_AppleReminders.md")
+        
+        if !FileManager.default.fileExists(atPath: mdPath) {
+            return tasks
+        }
+        
+        let content = try String(contentsOfFile: mdPath)
+        var currentSection = "Inbox"
+        
+        for line in content.components(separatedBy: .newlines) {
+            if line.hasPrefix("## ") {
+                currentSection = String(line.dropFirst(3))
+                continue
+            }
+            
+            guard line.hasPrefix("- ") else { continue }
+            
+            let isComplete = line.hasPrefix("- [x]") || line.hasPrefix("- [X]")
+            let textStart = isComplete ? line.index(line.startIndex, offsetBy: 6) : line.index(line.startIndex, offsetBy: 4)
+            var text = String(line[textStart...]).trimmingCharacters(in: .whitespaces)
+            
+            // Remove any leading "]" and trim whitespace
+            if text.hasPrefix("]") {
+                text = String(text.dropFirst()).trimmingCharacters(in: .whitespaces)
+            }
+            
+            // Extract UUID if present
+            if let id = extractIdFromNotes(text) {
+                // Remove the ID from the text
+                if let idRange = text.range(of: " \\^+[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}", options: .regularExpression) {
+                    text = String(text[..<idRange.lowerBound]).trimmingCharacters(in: .whitespaces)
+                }
+                
+                // Extract due date if present
+                var dueDate = ""
+                if let dateRange = text.range(of: "📅 \\d{4}-\\d{2}-\\d{2}", options: .regularExpression) {
+                    dueDate = String(text[dateRange].dropFirst(2)).trimmingCharacters(in: .whitespaces)
+                    text = String(text[..<dateRange.lowerBound]).trimmingCharacters(in: .whitespaces)
+                }
+                
+                tasks[id] = TaskStatus(
+                    isComplete: isComplete,
+                    title: text,
+                    dueDate: dueDate,
+                    parentList: currentSection,
+                    notes: ""
+                )
+            }
+        }
+        
+        return tasks
     }
     
     static func scanAppleReminders(
         eventStore: EKEventStore,
-        remindersDBPath: String,
         vaultPath: String
-    ) async throws -> [String: [String: Any]] {
-        var remindersDB: [String: [String: Any]] = [:]
+    ) async throws -> [String: TaskStatus] {
+        var tasks: [String: TaskStatus] = [:]
         let excludedLists = getExcludedLists(vaultPath: vaultPath)
-        print("Excluded lists: \(excludedLists)")
         
         // Fetch all reminders
         let predicate = eventStore.predicateForReminders(in: nil)
         let reminders = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<[EKReminder], Error>) in
             eventStore.fetchReminders(matching: predicate) { reminders in
                 if let reminders = reminders {
-                    continuation.resume(returning: reminders)
+                    let filteredReminders = reminders.filter { !excludedLists.contains($0.calendar.title) }
+                    continuation.resume(returning: filteredReminders)
                 } else {
-                    continuation.resume(throwing: NSError(domain: "RemindersFetch", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to fetch reminders"]))
+                    continuation.resume(throwing: NSError(domain: "RemindersFetch", code: -1))
                 }
             }
         }
         
+        // Process reminders
         for reminder in reminders {
             guard let title = reminder.title else { continue }
             
-            // Skip if in excluded list
-            if excludedLists.contains(reminder.calendar.title) {
-                print("Skipping reminder '\(title)' because it's in excluded list '\(reminder.calendar.title)'")
-                continue
+            if let notes = reminder.notes, let id = extractIdFromNotes(notes) {
+                tasks[id] = TaskStatus(
+                    isComplete: reminder.isCompleted,
+                    title: title,
+                    dueDate: reminder.dueDateComponents?.date?.description ?? "",
+                    parentList: reminder.calendar.title,
+                    notes: notes
+                )
             }
-            
-            // Extract or generate ID
-            var id = ""
-            var existingNotes = reminder.notes ?? ""
-            
-            // Check for existing IDs in notes
-            if let notes = reminder.notes {
-                // Try double caret first
-                if let idRange = notes.range(of: "\\^\\^[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}", options: .regularExpression) {
-                    id = String(notes[notes.index(after: notes.index(after: idRange.lowerBound))..<idRange.upperBound])
-                }
-                // Try single caret if double not found
-                else if let idRange = notes.range(of: "\\^[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}", options: .regularExpression) {
-                    id = String(notes[notes.index(after: idRange.lowerBound)..<idRange.upperBound])
-                }
-            }
-            
-            // Only generate and add new ID if no ID was found
-            if id.isEmpty {
-                id = UUID().uuidString
-                // Add new ID to notes
-                if existingNotes.isEmpty {
-                    existingNotes = " ^" + id
-                } else {
-                    existingNotes += " ^" + id
-                }
-                reminder.notes = existingNotes
-                try eventStore.save(reminder, commit: true)
-            }
-            
-            // Normalize ID before storing
-            let normalizedId = normalizeId(id)
-            remindersDB[normalizedId] = [
-                "title": title,
-                "completed": reminder.isCompleted,
-                "notes": reminder.notes ?? "",
-                "parentList": reminder.calendar.title,
-                "dueDate": reminder.dueDateComponents?.date?.description ?? ""
-            ]
         }
         
-        // Save database
-        let data = try JSONSerialization.data(withJSONObject: remindersDB)
-        try data.write(to: URL(fileURLWithPath: remindersDBPath))
-        
-        return remindersDB
+        return tasks
     }
     
     static func scanLocalTasks(
@@ -202,32 +360,47 @@ struct ExportOtherRemindersCLI {
                 let textStart = completed ? line.index(line.startIndex, offsetBy: 6) : line.index(line.startIndex, offsetBy: 4)
                 var text = String(line[textStart...]).trimmingCharacters(in: .whitespaces)
                 
-                // Extract ID if present - try both double and single caret
-                var id = ""
-                if let idRange = text.range(of: " \\^\\^[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}", options: .regularExpression) {
-                    let idStart = text.index(idRange.lowerBound, offsetBy: 2)  // Skip space and double caret
-                    let idEnd = text.index(idRange.upperBound, offsetBy: 0)
-                    id = String(text[idStart..<idEnd])
-                    text = String(text[..<idRange.lowerBound]).trimmingCharacters(in: .whitespaces)
-                }
-                else if let idRange = text.range(of: " \\^[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}", options: .regularExpression) {
-                    let idStart = text.index(idRange.lowerBound, offsetBy: 1)  // Skip space and single caret
-                    let idEnd = text.index(idRange.upperBound, offsetBy: 0)
-                    id = String(text[idStart..<idEnd])
-                    text = String(text[..<idRange.lowerBound]).trimmingCharacters(in: .whitespaces)
+                // Remove any leading ']' and trim whitespace
+                if text.hasPrefix("]") {
+                    text = String(text.dropFirst()).trimmingCharacters(in: .whitespaces)
                 }
                 
-                if id.isEmpty {
+                // Extract due date if present
+                var dueDate = ""
+                if let dateRange = text.range(of: "📅 \\d{4}-\\d{2}-\\d{2}", options: .regularExpression) {
+                    dueDate = String(text[dateRange].dropFirst(2)).trimmingCharacters(in: .whitespaces)
+                    text = String(text[..<dateRange.lowerBound]).trimmingCharacters(in: .whitespaces)
+                }
+                
+                // Extract ID if present
+                var id = ""
+                if let existingId = extractIdFromNotes(text) {
+                    id = existingId
+                    // Remove the ID from the text
+                    if let idRange = text.range(of: " \\^+[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}", options: .regularExpression) {
+                        text = String(text[..<idRange.lowerBound]).trimmingCharacters(in: .whitespaces)
+                    }
+                } else {
                     id = UUID().uuidString
+                }
+                
+                // Skip empty tasks
+                if text.isEmpty {
+                    continue
                 }
                 
                 // Normalize ID before storing
                 let normalizedId = normalizeId(id)
-                localDB[normalizedId] = [
-                    "title": text,
-                    "completed": completed,
-                    "parentList": currentSection
-                ]
+                
+                // Only add to localDB if we haven't seen this ID before
+                if localDB[normalizedId] == nil {
+                    localDB[normalizedId] = [
+                        "title": text,
+                        "completed": completed,
+                        "parentList": currentSection,
+                        "dueDate": dueDate
+                    ]
+                }
             }
         }
         
@@ -244,34 +417,150 @@ struct ExportOtherRemindersCLI {
         eventStore: EKEventStore,
         vaultPath: String,
         remindersDBPath: String,
-        localDBPath: String
+        localDBPath: String,
+        consolidatedIds: [String: String]
     ) async throws {
         print("Starting completion sync...")
         var updatedRemindersDB = remindersDB
-        var updatedLocalDB = localDB
+        let updatedLocalDB = localDB
+        let excludedLists = getExcludedLists(vaultPath: vaultPath)
+        
+        // Debug: Print IDs from both databases
+        print("\nDEBUG: Database IDs")
+        print("Local DB IDs:", Array(localDB.keys))
+        print("Reminders DB IDs:", Array(remindersDB.keys))
+        print("Number of local tasks:", localDB.count)
+        print("Number of reminder tasks:", remindersDB.count)
         
         // First sync completion status for tasks with matching IDs
         let commonIds = Set(remindersDB.keys).intersection(localDB.keys)
-        for id in commonIds {
-            let reminderTask = remindersDB[id]!
-            let localTask = localDB[id]!
-            
-            let reminderCompleted = reminderTask["completed"] as? Bool ?? false
-            let localCompleted = localTask["completed"] as? Bool ?? false
-            
-            // If either is complete, mark both as complete
-            if reminderCompleted || localCompleted {
-                updatedRemindersDB[id]?["completed"] = true
-                updatedLocalDB[id]?["completed"] = true
-                
-                // Update Apple Reminder if needed
-                if !reminderCompleted {
-                    if let reminder = try await findReminderById(id: id, eventStore: eventStore) {
-                        reminder.isCompleted = true
-                        try eventStore.save(reminder, commit: true)
-                    }
+        print("\nDEBUG: Common IDs count:", commonIds.count)
+        
+        // Debug: Print tasks that exist in local but not in reminders
+        let onlyInLocal = Set(localDB.keys).subtracting(remindersDB.keys)
+        print("\nDEBUG: Tasks only in local DB:")
+        for id in onlyInLocal {
+            if let task = localDB[id] {
+                print("Title:", task["title"] as? String ?? "nil")
+                print("ID:", id)
+                print("Parent List:", task["parentList"] as? String ?? "nil")
+                print("---")
+            }
+        }
+        
+        // First, fetch all existing reminders to check for duplicates
+        let predicate = eventStore.predicateForReminders(in: nil)
+        let existingReminders = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<[EKReminder], Error>) in
+            eventStore.fetchReminders(matching: predicate) { reminders in
+                if let reminders = reminders {
+                    // Filter out excluded lists before processing
+                    let filteredReminders = reminders.filter { !excludedLists.contains($0.calendar.title) }
+                    continuation.resume(returning: filteredReminders)
+                } else {
+                    continuation.resume(throwing: NSError(domain: "RemindersFetch", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to fetch reminders"]))
                 }
             }
+        }
+        
+        // Debug: Print all reminders and their IDs
+        print("\nDEBUG: All Apple Reminders:")
+        for reminder in existingReminders {
+            print("Title:", reminder.title ?? "nil")
+            print("Notes:", reminder.notes ?? "nil")
+            if let notes = reminder.notes, let id = extractIdFromNotes(notes) {
+                print("Extracted ID:", id)
+                print("Normalized ID:", normalizeId(id))
+            } else {
+                print("No ID found")
+            }
+            print("List:", reminder.calendar.title)
+            print("---")
+        }
+        
+        // Create map of existing IDs
+        var existingIds = Set<String>()
+        for reminder in existingReminders {
+            if let notes = reminder.notes, let id = extractIdFromNotes(notes) {
+                let normalizedId = normalizeId(id)
+                existingIds.insert(normalizedId)
+            }
+        }
+        
+        // Create new reminders for tasks that only exist in _AppleReminders.md
+        let newTaskIds = Set(localDB.keys).subtracting(remindersDB.keys)
+        
+        for id in newTaskIds {
+            // Skip if this ID already exists in Apple Reminders
+            let normalizedId = normalizeId(id)
+            if existingIds.contains(normalizedId) {
+                continue
+            }
+            
+            guard let localTask = localDB[id] else { continue }
+            let title = localTask["title"] as? String ?? ""
+            let parentList = localTask["parentList"] as? String ?? "Inbox"
+            
+            // Skip if parent list is excluded
+            if excludedLists.contains(parentList) {
+                continue
+            }
+            
+            // Check if we have a consolidated ID for this title
+            let finalId: String
+            if let consolidatedId = consolidatedIds[title] {
+                finalId = consolidatedId
+            } else {
+                finalId = id
+            }
+            
+            let completed = localTask["completed"] as? Bool ?? false
+            let dueDate = localTask["dueDate"] as? String ?? ""
+            
+            // Create new reminder
+            let reminder = EKReminder(eventStore: eventStore)
+            reminder.title = title
+            reminder.notes = formatIdForNotes(finalId)  // Use consistent ID formatting
+            reminder.isCompleted = completed
+            
+            // Set due date if present
+            if !dueDate.isEmpty {
+                let dateFormatter = DateFormatter()
+                dateFormatter.dateFormat = "yyyy-MM-dd"
+                if let date = dateFormatter.date(from: dueDate) {
+                    var components = Calendar.current.dateComponents([.year, .month, .day], from: date)
+                    components.hour = 23
+                    components.minute = 59
+                    reminder.dueDateComponents = components
+                }
+            }
+            
+            // Find or create calendar for the parent list
+            var targetCalendar: EKCalendar?
+            for calendar in eventStore.calendars(for: .reminder) {
+                if calendar.title == parentList {
+                    targetCalendar = calendar
+                    break
+                }
+            }
+            
+            // If list doesn't exist, create in default calendar
+            reminder.calendar = targetCalendar ?? eventStore.defaultCalendarForNewReminders()
+            
+            // Save the reminder
+            try eventStore.save(reminder, commit: true)
+            print("Created new reminder: \(title) in list: \(reminder.calendar.title)")
+            
+            // Add to remindersDB
+            updatedRemindersDB[finalId] = [
+                "title": title,
+                "completed": completed,
+                "notes": reminder.notes ?? "",
+                "parentList": reminder.calendar.title,
+                "dueDate": dueDate
+            ]
+            
+            // Add to existing IDs set
+            existingIds.insert(normalizeId(finalId))
         }
         
         // Save updated databases
@@ -285,22 +574,21 @@ struct ExportOtherRemindersCLI {
         try writeIncompleteTasks(remindersDB: updatedRemindersDB, localDB: updatedLocalDB, vaultPath: vaultPath)
     }
     
-    static func findReminderById(id: String, eventStore: EKEventStore) async throws -> EKReminder? {
+    static func findReminderById(id: String, eventStore: EKEventStore, vaultPath: String) async throws -> EKReminder? {
         let predicate = eventStore.predicateForReminders(in: nil)
         let reminders = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<[EKReminder], Error>) in
             eventStore.fetchReminders(matching: predicate) { reminders in
                 if let reminders = reminders {
                     continuation.resume(returning: reminders)
                 } else {
-                    continuation.resume(throwing: NSError(domain: "RemindersFetch", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to fetch reminders"]))
+                    continuation.resume(throwing: NSError(domain: "RemindersFetch", code: -1))
                 }
             }
         }
-        // Try both double and single caret with normalized ID
-        let normalizedId = normalizeId(id)
-        return reminders.first { 
-            let reminderNotes = $0.notes ?? ""
-            return reminderNotes.contains("^^" + normalizedId) || reminderNotes.contains("^" + normalizedId)
+        
+        return reminders.first { reminder in
+            guard let notes = reminder.notes else { return false }
+            return extractIdFromNotes(notes) == id
         }
     }
     
@@ -310,7 +598,7 @@ struct ExportOtherRemindersCLI {
         vaultPath: String
     ) throws {
         let mdPath = (vaultPath as NSString).appendingPathComponent("_AppleReminders.md")
-        var tasksByList: [String: [(title: String, id: String)]] = [:]
+        var tasksByList: [String: [(title: String, id: String, dueDate: String)]] = [:]
         var processedIds = Set<String>()  // Keep track of processed IDs
         
         // First, add incomplete tasks from Reminders
@@ -319,26 +607,33 @@ struct ExportOtherRemindersCLI {
             if !completed {
                 let title = task["title"] as? String ?? ""
                 let parentList = task["parentList"] as? String ?? "Inbox"
+                let dueDate = task["dueDate"] as? String ?? ""
                 
                 // Skip if we've already processed this ID
-                if !processedIds.contains(id) {
-                    tasksByList[parentList, default: []].append((title: title, id: id))
-                    processedIds.insert(id)
+                if processedIds.contains(id) {
+                    continue
                 }
+                
+                tasksByList[parentList, default: []].append((title: title, id: id, dueDate: dueDate))
+                processedIds.insert(id)
             }
         }
         
         // Then, add incomplete tasks from local DB that aren't in Reminders
         for (id, task) in localDB {
             // Skip if we've already processed this ID
-            if !processedIds.contains(id) {
-                let completed = task["completed"] as? Bool ?? false
-                if !completed {
-                    let title = task["title"] as? String ?? ""
-                    let parentList = task["parentList"] as? String ?? "Inbox"
-                    tasksByList[parentList, default: []].append((title: title, id: id))
-                    processedIds.insert(id)
-                }
+            if processedIds.contains(id) {
+                continue
+            }
+            
+            let completed = task["completed"] as? Bool ?? false
+            if !completed {
+                let title = task["title"] as? String ?? ""
+                let parentList = task["parentList"] as? String ?? "Inbox"
+                let dueDate = task["dueDate"] as? String ?? ""
+                
+                tasksByList[parentList, default: []].append((title: title, id: id, dueDate: dueDate))
+                processedIds.insert(id)
             }
         }
         
@@ -349,35 +644,74 @@ struct ExportOtherRemindersCLI {
         
         // Write to file
         var content = ""
-        let sortedLists = tasksByList.keys.sorted()
         
-        for listName in sortedLists {
+        // First write Inbox if it exists
+        if let inboxTasks = tasksByList["Inbox"], !inboxTasks.isEmpty {
+            content += "## Inbox\n\n"
+            for task in inboxTasks {
+                let cleanTitle = task.title.hasPrefix("]") ? 
+                    String(task.title.dropFirst()).trimmingCharacters(in: .whitespaces) : 
+                    task.title
+                
+                // Format due date if present
+                var taskLine = "- [ ] \(cleanTitle)"
+                if !task.dueDate.isEmpty {
+                    // Extract YYYY-MM-DD from the date string
+                    if let dateRange = task.dueDate.range(of: "\\d{4}-\\d{2}-\\d{2}", options: .regularExpression) {
+                        let formattedDate = String(task.dueDate[dateRange])
+                        taskLine += " 📅 \(formattedDate)"
+                    }
+                }
+                
+                taskLine += formatIdForMarkdown(task.id) + "\n"  // Use consistent ID formatting
+                content += taskLine
+            }
+            content += "\n"
+        }
+        
+        // Then write other lists in alphabetical order
+        let otherLists = tasksByList.keys
+            .filter { $0 != "Inbox" }
+            .sorted()
+        
+        for listName in otherLists {
             if let tasks = tasksByList[listName], !tasks.isEmpty {
-                content += "\n## \(listName)\n\n"
+                content += "## \(listName)\n\n"
                 for task in tasks {
-                    // Remove any "]" from the beginning of titles
                     let cleanTitle = task.title.hasPrefix("]") ? 
                         String(task.title.dropFirst()).trimmingCharacters(in: .whitespaces) : 
                         task.title
-                    content += "- [ ] \(cleanTitle) ^" + task.id + "\n"
+                    
+                    // Format due date if present
+                    var taskLine = "- [ ] \(cleanTitle)"
+                    if !task.dueDate.isEmpty {
+                        // Extract YYYY-MM-DD from the date string
+                        if let dateRange = task.dueDate.range(of: "\\d{4}-\\d{2}-\\d{2}", options: .regularExpression) {
+                            let formattedDate = String(task.dueDate[dateRange])
+                            taskLine += " 📅 \(formattedDate)"
+                        }
+                    }
+                    
+                    taskLine += formatIdForMarkdown(task.id) + "\n"  // Use consistent ID formatting
+                    content += taskLine
                 }
+                content += "\n"
             }
         }
         
-        // Remove leading newline if present
-        if content.hasPrefix("\n") {
-            content = String(content.dropFirst())
-        }
+        // Remove trailing newlines
+        content = content.trimmingCharacters(in: .newlines)
         
         try content.write(to: URL(fileURLWithPath: mdPath), atomically: true, encoding: .utf8)
     }
     
-    static func cleanupReminders(
-        eventStore: EKEventStore,
-        vaultPath: String
-    ) async throws {
-        print("Starting cleanup of reminder IDs...")
+    static func cleanupReminders(eventStore: EKEventStore, vaultPath: String) async throws {
+        print("\nStarting cleanup...")
+        
         let excludedLists = getExcludedLists(vaultPath: vaultPath)
+        print("\nExcluded lists:", excludedLists)
+        
+        var cleanedCount = 0
         
         // Fetch all reminders
         let predicate = eventStore.predicateForReminders(in: nil)
@@ -386,50 +720,209 @@ struct ExportOtherRemindersCLI {
                 if let reminders = reminders {
                     continuation.resume(returning: reminders)
                 } else {
-                    continuation.resume(throwing: NSError(domain: "RemindersFetch", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to fetch reminders"]))
+                    continuation.resume(throwing: NSError(domain: "RemindersFetch", code: -1))
                 }
             }
         }
         
-        var cleanedCount = 0
+        // Process reminders
         for reminder in reminders {
+            // Skip reminders in excluded lists
+            guard !excludedLists.contains(reminder.calendar.title) else { continue }
+            
+            // Check if reminder has an ID
+            if let notes = reminder.notes, extractIdFromNotes(notes) != nil {
+                // Remove the ID from notes
+                reminder.notes = removeIdFromNotes(notes)
+                try eventStore.save(reminder, commit: true)
+                cleanedCount += 1
+            }
+        }
+        
+        print("\nCleanup completed. Removed IDs from \(cleanedCount) reminders.")
+    }
+    
+    static func syncTasks(
+        eventStore: EKEventStore,
+        vaultPath: String
+    ) async throws {
+        let mdPath = (vaultPath as NSString).appendingPathComponent("_AppleReminders.md")
+        var taskDB = try loadTaskDatabase(vaultPath: vaultPath)
+        let excludedLists = getExcludedLists(vaultPath: vaultPath)
+        
+        // Get tasks from both sources
+        let mdTasks = try scanMarkdownTasks(vaultPath: vaultPath)
+        let reminderTasks = try await scanAppleReminders(eventStore: eventStore, vaultPath: vaultPath)
+        
+        // Combine all known UUIDs
+        var allIds = Set(mdTasks.keys).union(reminderTasks.keys)
+        
+        // First, handle tasks with UUIDs
+        for id in allIds {
+            let mdTask = mdTasks[id]
+            let reminderTask = reminderTasks[id]
+            
+            // Skip if the task is in an excluded list
+            if let task = mdTask ?? reminderTask {
+                if excludedLists.contains(task.parentList) {
+                    continue
+                }
+            }
+            
+            // If task exists in either place and is marked complete, mark it complete everywhere
+            let isComplete = (mdTask?.isComplete ?? false) || (reminderTask?.isComplete ?? false)
+            
+            // Update or create reminder in Apple Reminders
+            if let task = mdTask ?? reminderTask {
+                if let reminder = try await findReminderById(id: id, eventStore: eventStore, vaultPath: vaultPath) {
+                    // Update existing reminder
+                    reminder.isCompleted = isComplete
+                    try eventStore.save(reminder, commit: true)
+                } else {
+                    // Create new reminder
+                    let reminder = EKReminder(eventStore: eventStore)
+                    reminder.title = task.title
+                    reminder.notes = formatIdForNotes(id)
+                    reminder.isCompleted = isComplete
+                    
+                    // Set due date if present
+                    if !task.dueDate.isEmpty {
+                        let dateFormatter = DateFormatter()
+                        dateFormatter.dateFormat = "yyyy-MM-dd"
+                        if let date = dateFormatter.date(from: task.dueDate) {
+                            var components = Calendar.current.dateComponents([.year, .month, .day], from: date)
+                            components.hour = 23
+                            components.minute = 59
+                            reminder.dueDateComponents = components
+                        }
+                    }
+                    
+                    // Set list
+                    var targetCalendar: EKCalendar?
+                    for calendar in eventStore.calendars(for: .reminder) {
+                        if calendar.title == task.parentList {
+                            targetCalendar = calendar
+                            break
+                        }
+                    }
+                    reminder.calendar = targetCalendar ?? eventStore.defaultCalendarForNewReminders()
+                    
+                    try eventStore.save(reminder, commit: true)
+                }
+            }
+            
+            // Update task database
+            taskDB[id] = TaskStatus(
+                isComplete: isComplete,
+                title: mdTask?.title ?? reminderTask?.title ?? "",
+                dueDate: mdTask?.dueDate ?? reminderTask?.dueDate ?? "",
+                parentList: mdTask?.parentList ?? reminderTask?.parentList ?? "Inbox",
+                notes: mdTask?.notes ?? reminderTask?.notes ?? ""
+            )
+        }
+        
+        // Handle tasks without UUIDs in Apple Reminders
+        let allReminders = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<[EKReminder], Error>) in
+            eventStore.fetchReminders(matching: eventStore.predicateForReminders(in: nil)) { reminders in
+                if let reminders = reminders {
+                    // Filter out excluded lists
+                    let filteredReminders = reminders.filter { !excludedLists.contains($0.calendar.title) }
+                    continuation.resume(returning: filteredReminders)
+                } else {
+                    continuation.resume(throwing: NSError(domain: "RemindersFetch", code: -1))
+                }
+            }
+        }
+        
+        for reminder in allReminders {
             // Skip if in excluded list
             if excludedLists.contains(reminder.calendar.title) {
                 continue
             }
             
-            if var notes = reminder.notes {
-                var wasModified = false
-                
-                // Remove old style ID: format
-                if let idRange = notes.range(of: "ID: [A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\n?", options: .regularExpression) {
-                    notes.removeSubrange(idRange)
-                    wasModified = true
-                }
-                
-                // Remove double caret format
-                if let idRange = notes.range(of: " \\^\\^[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}", options: .regularExpression) {
-                    notes.removeSubrange(idRange)
-                    wasModified = true
-                }
-                
-                // Remove single caret format
-                if let idRange = notes.range(of: " \\^[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}", options: .regularExpression) {
-                    notes.removeSubrange(idRange)
-                    wasModified = true
-                }
-                
-                if wasModified {
-                    // Trim any extra whitespace
-                    notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
-                    reminder.notes = notes.isEmpty ? nil : notes
-                    try eventStore.save(reminder, commit: true)
-                    cleanedCount += 1
-                    print("Cleaned ID from reminder: \(reminder.title ?? "")")
-                }
+            guard let title = reminder.title,
+                  reminder.notes == nil || extractIdFromNotes(reminder.notes!) == nil else { continue }
+            
+            // Generate new UUID
+            let id = UUID().uuidString
+            
+            // Add ID to reminder
+            reminder.notes = (reminder.notes ?? "") + formatIdForNotes(id)
+            try eventStore.save(reminder, commit: true)
+            
+            // Add to task database
+            taskDB[id] = TaskStatus(
+                isComplete: reminder.isCompleted,
+                title: title,
+                dueDate: reminder.dueDateComponents?.date?.description ?? "",
+                parentList: reminder.calendar.title,
+                notes: reminder.notes ?? ""
+            )
+            
+            allIds.insert(id)
+        }
+        
+        // Save task database
+        try saveTaskDatabase(taskDB, vaultPath: vaultPath)
+        
+        // Write markdown file
+        var content = ""
+        var tasksByList: [String: [(title: String, id: String, dueDate: String, isComplete: Bool)]] = [:]
+        
+        // Group tasks by list (excluding excluded lists)
+        for (id, task) in taskDB {
+            if !task.isComplete && !excludedLists.contains(task.parentList) {  // Only include incomplete tasks from non-excluded lists
+                tasksByList[task.parentList, default: []].append((
+                    title: task.title,
+                    id: id,
+                    dueDate: task.dueDate,
+                    isComplete: task.isComplete
+                ))
             }
         }
         
-        print("Cleanup completed. Removed IDs from \(cleanedCount) reminders.")
+        // Write Inbox first
+        if let inboxTasks = tasksByList["Inbox"]?.sorted(by: { $0.title < $1.title }) {
+            content += "## Inbox\n\n"
+            for task in inboxTasks {
+                // Remove any leading "]" from the title
+                let cleanTitle = task.title.hasPrefix("]") ? 
+                    String(task.title.dropFirst()).trimmingCharacters(in: .whitespaces) : 
+                    task.title
+                var line = "- [ ] \(cleanTitle)"
+                if !task.dueDate.isEmpty {
+                    if let dateRange = task.dueDate.range(of: "\\d{4}-\\d{2}-\\d{2}", options: .regularExpression) {
+                        line += " 📅 \(task.dueDate[dateRange])"
+                    }
+                }
+                line += formatIdForMarkdown(task.id) + "\n"
+                content += line
+            }
+            content += "\n"
+        }
+        
+        // Write other lists (excluding excluded lists)
+        for list in tasksByList.keys.sorted().filter({ $0 != "Inbox" && !excludedLists.contains($0) }) {
+            if let tasks = tasksByList[list]?.sorted(by: { $0.title < $1.title }), !tasks.isEmpty {
+                content += "## \(list)\n\n"
+                for task in tasks {
+                    // Remove any leading "]" from the title
+                    let cleanTitle = task.title.hasPrefix("]") ? 
+                        String(task.title.dropFirst()).trimmingCharacters(in: .whitespaces) : 
+                        task.title
+                    var line = "- [ ] \(cleanTitle)"
+                    if !task.dueDate.isEmpty {
+                        if let dateRange = task.dueDate.range(of: "\\d{4}-\\d{2}-\\d{2}", options: .regularExpression) {
+                            line += " 📅 \(task.dueDate[dateRange])"
+                        }
+                    }
+                    line += formatIdForMarkdown(task.id) + "\n"
+                    content += line
+                }
+                content += "\n"
+            }
+        }
+        
+        try content.write(to: URL(fileURLWithPath: mdPath), atomically: true, encoding: .utf8)
     }
 }
