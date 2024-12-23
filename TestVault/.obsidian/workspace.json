@@ -4,21 +4,17 @@
     "type": "split",
     "children": [
       {
-        "id": "55eaf597a9e086a7",
+        "id": "e89e0954bffc7af6",
         "type": "tabs",
         "children": [
           {
-            "id": "faae4d5ae3d22cd1",
+            "id": "6634a7b7a99bad6c",
             "type": "leaf",
             "state": {
-              "type": "markdown",
-              "state": {
-                "file": "_AppleReminders.md",
-                "mode": "source",
-                "source": false
-              },
+              "type": "empty",
+              "state": {},
               "icon": "lucide-file",
-              "title": "_AppleReminders"
+              "title": "New tab"
             }
           }
         ]
@@ -93,7 +89,6 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "_AppleReminders.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -103,7 +98,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for _AppleReminders"
+              "title": "Backlinks"
             }
           },
           {
@@ -162,11 +157,11 @@
       "command-palette:Open command palette": false
     }
   },
-  "active": "faae4d5ae3d22cd1",
+  "active": "6634a7b7a99bad6c",
   "lastOpenFiles": [
+    "testing 2nd reminder.md",
     "_AppleReminders.md",
-    "today.md",
     "Testreminder.md",
-    "testing 2nd reminder.md"
+    "today.md"
   ]
 }

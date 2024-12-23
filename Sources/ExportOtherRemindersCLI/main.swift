@@ -8,19 +8,7 @@ struct ExportOtherRemindersCLI {
     static func getExcludedLists(vaultPath: String) -> Set<String> {
         var excludedLists: Set<String> = [
             "Groceries",
-            "Shopping",
             "Cooking-HouseHold",
-            "Things to do",
-            "Anjali Vatsal",
-            "Papers To Read",
-            "Books To Read",
-            "Movies/TV Shows to Watch",
-            "Books to listen (Anjali)",
-            "Family",
-            "Future shopping list",
-            "Anjali internship tasks",
-            "India trip shopping list",
-            "Sonali Credit card",
             "obsidian"  // Always exclude obsidian list
         ]
         // Add vault name to excluded lists
@@ -742,10 +730,103 @@ struct ExportOtherRemindersCLI {
         print("\nCleanup completed. Removed IDs from \(cleanedCount) reminders.")
     }
     
+    static func handleNewTasksWithoutID(
+        eventStore: EKEventStore,
+        vaultPath: String
+    ) async throws {
+        let mdPath = (vaultPath as NSString).appendingPathComponent("_AppleReminders.md")
+        guard FileManager.default.fileExists(atPath: mdPath) else { return }
+        
+        // Load the file content
+        let rawContent = try String(contentsOfFile: mdPath, encoding: .utf8)
+        let lines = rawContent.components(separatedBy: .newlines)
+        var newContent: [String] = []
+        
+        for line in lines {
+            // Keep track of sections (just preserve them in output)
+            if line.hasPrefix("## ") {
+                newContent.append(line)
+                continue
+            }
+            
+            // Skip non-task lines
+            guard line.hasPrefix("- [") else {
+                newContent.append(line)
+                continue
+            }
+            
+            // Check if this line contains any known ID
+            if let idInLine = extractIdFromNotes(line), !idInLine.isEmpty {
+                // It has an ID, so keep it in the new content
+                newContent.append(line)
+                continue
+            }
+            
+            // No ID found => treat this as a new task to add to Reminders
+            let isComplete = line.hasPrefix("- [x]") || line.hasPrefix("- [X]")
+            let textStart = isComplete ? line.index(line.startIndex, offsetBy: 6) : line.index(line.startIndex, offsetBy: 4)
+            var cleanedLine = String(line[textStart...]).trimmingCharacters(in: .whitespaces)
+            
+            // Remove any leading "]" if present
+            if cleanedLine.hasPrefix("]") {
+                cleanedLine = String(cleanedLine.dropFirst()).trimmingCharacters(in: .whitespaces)
+            }
+            
+            // Extract due date if present
+            var dueDateString = ""
+            var titleOnly = cleanedLine
+            if let dateRange = cleanedLine.range(of: "📅 \\d{4}-\\d{2}-\\d{2}", options: .regularExpression) {
+                dueDateString = String(cleanedLine[dateRange].dropFirst(2)).trimmingCharacters(in: .whitespaces)
+                titleOnly = String(cleanedLine[..<dateRange.lowerBound]).trimmingCharacters(in: .whitespaces)
+            }
+            
+            // Create a new Apple Reminder in the Inbox
+            let reminder = EKReminder(eventStore: eventStore)
+            reminder.title = titleOnly
+            reminder.isCompleted = isComplete
+            
+            // Set due date if any
+            if !dueDateString.isEmpty {
+                let dateFormatter = DateFormatter()
+                dateFormatter.dateFormat = "yyyy-MM-dd"
+                if let date = dateFormatter.date(from: dueDateString) {
+                    var components = Calendar.current.dateComponents([.year, .month, .day], from: date)
+                    components.hour = 23
+                    components.minute = 59
+                    reminder.dueDateComponents = components
+                }
+            }
+            
+            // Find or use default Inbox calendar
+            var inboxCalendar: EKCalendar?
+            for calendar in eventStore.calendars(for: .reminder) {
+                if calendar.title == "Inbox" {
+                    inboxCalendar = calendar
+                    break
+                }
+            }
+            reminder.calendar = inboxCalendar ?? eventStore.defaultCalendarForNewReminders()
+            
+            // Save the reminder
+            try eventStore.save(reminder, commit: true)
+            print("Created new reminder '\(titleOnly)' in Inbox")
+            
+            // Don't add this line back to the content since it's now in Reminders
+        }
+        
+        // Write the updated content back to the file
+        let updatedContent = newContent.joined(separator: "\n")
+        try updatedContent.write(toFile: mdPath, atomically: true, encoding: .utf8)
+    }
+    
     static func syncTasks(
         eventStore: EKEventStore,
         vaultPath: String
     ) async throws {
+        // First, process any new tasks without IDs
+        try await handleNewTasksWithoutID(eventStore: eventStore, vaultPath: vaultPath)
+        
+        // Continue with existing sync logic...
         let mdPath = (vaultPath as NSString).appendingPathComponent("_AppleReminders.md")
         var taskDB = try loadTaskDatabase(vaultPath: vaultPath)
         let excludedLists = getExcludedLists(vaultPath: vaultPath)

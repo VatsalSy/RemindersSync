@@ -20,28 +20,34 @@ The package includes three command-line tools:
    - Syncs tasks between Obsidian and a dedicated Reminders list (named same as vault)
    - Syncs completion status both ways
    - Only affects tasks in your vault, not those in `_AppleReminders.md`
+   - Preserves task IDs and mappings between systems
    ```bash
    swift run RemindersSync /path/to/vault
    ```
 
 2. **ScanVault**: One-way sync from Obsidian to Reminders
    - Only syncs tasks from Obsidian to Reminders
-   - Does not sync completion status
+   - Does not sync completion status back to Obsidian
+   - Creates tasks in the vault-named list in Apple Reminders
    ```bash
    swift run ScanVault /path/to/vault
    ```
 
-3. **ExportOtherReminders**: Two-way sync for other reminders
-   - Maintains tasks in `_AppleReminders.md`
-   - Syncs completion status both ways
-   - Stores task IDs in both systems for reliable syncing
-   - Creates missing tasks in Inbox list if found in `_AppleReminders.md`
+3. **ExportOtherReminders**: Two-way sync for non-vault reminders
+   - Syncs tasks between `_AppleReminders.md` and Apple Reminders (excluding vault list)
+   - Maintains two-way completion status sync
+   - Auto-creates tasks in Inbox for new entries without IDs
+   - Preserves list organization and due dates
+   - Handles task consolidation and ID management
    ```bash
    # Regular sync
    swift run ExportOtherReminders /path/to/vault
 
    # Clean up IDs (if needed)
    swift run ExportOtherReminders /path/to/vault --cleanup
+
+   # Get help with options
+   swift run ExportOtherReminders --help
    ```
 
 ### ExportOtherReminders Details
@@ -54,11 +60,20 @@ The `ExportOtherReminders` tool provides a robust sync between Apple Reminders a
 - Maintains unique IDs for reliable syncing
 - Handles both new and existing tasks
 - Cleans up duplicate entries
+- Auto-creates tasks in Inbox for new entries without IDs
+
+#### Task Creation Behavior
+- New tasks added to `_AppleReminders.md` without IDs:
+  - Automatically created in Apple Reminders' Inbox
+  - Removed from the markdown file after creation
+  - Will reappear in markdown with proper ID after next sync
+- New tasks with IDs:
+  - Synced bidirectionally between systems
+  - Maintain their list organization
 
 #### Excluded Lists
 By default, the following lists are excluded from sync:
 - Groceries
-- Shopping
 - Cooking-HouseHold
 - obsidian
 - Your vault name (to avoid conflicts with RemindersSync)
@@ -68,10 +83,11 @@ By default, the following lists are excluded from sync:
   - Organized by sections using `## List Name` headers
   - Each task includes a unique ID: `- [ ] Task text ^UUID`
   - Tasks without a section go to "Inbox"
+  - Supports due dates with YYYY-MM-DD format
 
 #### State Files
-- `._RemindersDB.json`: Current state of Apple Reminders
-- `._LocalDB.json`: Current state of tasks from `_AppleReminders.md`
+- `._TaskDB.json`: Current state of all tasks with their metadata
+- `._ConsolidatedIds.json`: Mapping of task titles to their consolidated IDs
 
 #### Usage Examples
 
@@ -92,14 +108,16 @@ swift run ExportOtherReminders --help
 
 #### How It Works
 
-1. **Task Scanning**:
-   - Scans Apple Reminders (excluding specified lists)
-   - Scans `_AppleReminders.md`
-   - Maintains unique IDs for each task
+1. **Initial Processing**:
+   - Scans `_AppleReminders.md` for tasks without IDs
+   - Creates these tasks in Apple Reminders' Inbox
+   - Removes them from the markdown file
 
-2. **Completion Sync**:
-   - If a task is marked complete in either system, it's marked complete in both
-   - Syncs status bidirectionally
+2. **Main Sync**:
+   - Scans all remaining tasks in both systems
+   - Syncs completion status bidirectionally
+   - Maintains list organization
+   - Preserves due dates
 
 3. **Task Organization**:
    - Tasks are organized by their list in Apple Reminders
@@ -110,6 +128,7 @@ swift run ExportOtherReminders --help
    - Each task has a unique UUID
    - IDs are stored in Apple Reminders notes field
    - IDs are preserved in markdown using the `^UUID` format
+   - Consolidated IDs prevent duplicates
 
 #### Best Practices
 
@@ -117,6 +136,7 @@ swift run ExportOtherReminders --help
 2. Let the tool manage the `_AppleReminders.md` file structure
 3. Use list names in Apple Reminders to organize tasks
 4. Don't manually edit task IDs
+5. For new tasks in markdown, just add them without IDs - they'll be properly processed
 
 ## State Files
 
