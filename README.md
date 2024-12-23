@@ -152,6 +152,18 @@ The tools maintain several state files in your vault:
 - `._LocalDB.json`: State of tasks from `_AppleReminders.md`
 - `_AppleReminders.md`: Tasks synced with Apple Reminders (outside vault-named list)
 
+## License
+
+This project is licensed under the GNU General Public License v3.0 (GPLv3) - see the [LICENSE](LICENSE) file for details.
+
+The GPLv3 is a strong copyleft license that ensures the software remains free and open source. It grants you the freedom to:
+- Use the software for any purpose
+- Study how the program works and modify it
+- Redistribute copies
+- Distribute modified versions
+
+Any modifications or derivative works must also be licensed under GPLv3.
+
 ## Notes
 
 - Both tools require permission to access Apple Reminders
