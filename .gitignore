@@ -7,4 +7,5 @@ DerivedData/
 .swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
 .netrc
 TestVault/_AppleReminders.md
+TestVault/._*.json
 .windsurfrules

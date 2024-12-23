@@ -9,13 +9,36 @@ let package = Package(
         .macOS(.v13)
     ],
     products: [
-        .executable(name: "SwiftRemindersCLI", targets: ["SwiftRemindersCLI"])
+        .executable(name: "RemindersSync", targets: ["SwiftRemindersCLI"]),
+        .executable(name: "ScanVault", targets: ["ScanVaultCLI"]),
+        .executable(name: "ExportOtherReminders", targets: ["ExportOtherRemindersCLI"]),
+        .library(name: "RemindersSyncCore", targets: ["RemindersSyncCore"])
     ],
-    dependencies: [],
     targets: [
+        .target(
+            name: "RemindersSyncCore",
+            dependencies: [],
+            linkerSettings: [
+                .linkedFramework("EventKit")
+            ]
+        ),
         .executableTarget(
             name: "SwiftRemindersCLI",
-            dependencies: [],
+            dependencies: ["RemindersSyncCore"],
+            linkerSettings: [
+                .linkedFramework("EventKit")
+            ]
+        ),
+        .executableTarget(
+            name: "ScanVaultCLI",
+            dependencies: ["RemindersSyncCore"],
+            linkerSettings: [
+                .linkedFramework("EventKit")
+            ]
+        ),
+        .executableTarget(
+            name: "ExportOtherRemindersCLI",
+            dependencies: ["RemindersSyncCore"],
             linkerSettings: [
                 .linkedFramework("EventKit")
             ]
