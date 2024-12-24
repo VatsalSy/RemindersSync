@@ -5,7 +5,6 @@
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/VatsalSy/RemindersSync)](https://github.com/VatsalSy/RemindersSync/releases)
 [![GitHub last commit](https://img.shields.io/github/last-commit/VatsalSy/RemindersSync)](https://github.com/VatsalSy/RemindersSync/commits/main)
 [![macOS](https://img.shields.io/badge/platform-macOS-blue)](https://github.com/VatsalSy/RemindersSync#readme)
-[![GitHub Sponsors](https://img.shields.io/github/sponsors/VatsalSy)](https://github.com/sponsors/VatsalSy)
 
 A Swift-based tool to sync Obsidian tasks with Apple Reminders. Tasks are synced bidirectionally between your Obsidian vault and a dedicated Apple Reminders list (with the same name as your vault).
 
