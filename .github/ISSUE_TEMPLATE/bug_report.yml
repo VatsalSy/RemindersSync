@@ -1,0 +1,87 @@
+name: Bug Report
+description: File a bug report
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report!
+        
+  - type: dropdown
+    id: tool
+    attributes:
+      label: Which tool are you having issues with?
+      multiple: false
+      options:
+        - RemindersSync (Full two-way sync)
+        - ScanVault (One-way sync from Obsidian to Reminders)
+        - ExportOtherReminders (Two-way sync for non-vault reminders)
+    validations:
+      required: true
+
+  - type: input
+    id: os-version
+    attributes:
+      label: macOS Version
+      description: What version of macOS are you running?
+      placeholder: "e.g., macOS 14.2.1 (Sonoma)"
+    validations:
+      required: true
+
+  - type: input
+    id: terminal
+    attributes:
+      label: Terminal Used
+      description: Which terminal are you using to run the command?
+      placeholder: "e.g., macOS Terminal.app, iTerm2, VS Code integrated terminal"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Also tell us what you expected to happen
+      placeholder: "Describe the issue you encountered..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: How can we reproduce this issue?
+      placeholder: |
+        1. Run command '...'
+        2. Open file '...'
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: Please copy and paste any relevant log output. This will be automatically formatted into code, so no need for backticks.
+      render: shell
+
+  - type: textarea
+    id: obsidian-structure
+    attributes:
+      label: Obsidian Vault Structure
+      description: If relevant, please describe your vault structure and how you organize your tasks
+      placeholder: |
+        - Are your tasks in specific files/folders?
+        - How are your tasks formatted?
+        - Example of task format used
+
+  - type: textarea
+    id: reminders-structure
+    attributes:
+      label: Apple Reminders Structure
+      description: If relevant, please describe your Reminders setup
+      placeholder: |
+        - Which lists are you using?
+        - How are your reminders organized?
+        - Any specific naming conventions?

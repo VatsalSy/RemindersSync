@@ -1,6 +1,16 @@
 # RemindersSync
 
+[![License](https://img.shields.io/github/license/VatsalSy/RemindersSync)](https://github.com/VatsalSy/RemindersSync/blob/main/LICENSE)
+[![Swift Version](https://img.shields.io/badge/Swift-5.9-orange.svg)](https://swift.org)
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/VatsalSy/RemindersSync)](https://github.com/VatsalSy/RemindersSync/releases)
+[![GitHub last commit](https://img.shields.io/github/last-commit/VatsalSy/RemindersSync)](https://github.com/VatsalSy/RemindersSync/commits/main)
+[![macOS](https://img.shields.io/badge/platform-macOS-blue)](https://github.com/VatsalSy/RemindersSync#readme)
+[![GitHub Sponsors](https://img.shields.io/github/sponsors/VatsalSy)](https://github.com/sponsors/VatsalSy)
+
 A Swift-based tool to sync Obsidian tasks with Apple Reminders. Tasks are synced bidirectionally between your Obsidian vault and a dedicated Apple Reminders list (with the same name as your vault).
+
+If you encounter any problems or have suggestions, please open an issue on GitHub:<br>
+[![GitHub issues](https://img.shields.io/github/issues/VatsalSy/RemindersSync)](https://github.com/VatsalSy/RemindersSync/issues/new/choose)
 
 ## Features
 
@@ -151,6 +161,10 @@ The tools maintain several state files in your vault:
 - `._RemindersDB.json`: State of all Apple Reminders with their IDs
 - `._LocalDB.json`: State of tasks from `_AppleReminders.md`
 - `_AppleReminders.md`: Tasks synced with Apple Reminders (outside vault-named list)
+
+## Permissions Note
+
+When running these tools for the first time, macOS will request permission to access your Reminders. If you're using a non-native terminal emulator (like VS Code's integrated terminal, iTerm2, etc.), you might encounter issues where the permission prompt never appears. If this happens, try running the command in the native macOS Terminal app instead.
 
 ## License
 
