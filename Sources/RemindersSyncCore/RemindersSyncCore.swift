@@ -597,11 +597,15 @@ public func syncCompletedReminders(eventStore: EKEventStore, vaultPath: String) 
     print("Saved \(reminderStates.count) reminders to \(remindersJsonPath)")
     
     // 3. Load mappings
-    let mappingStore = try loadTaskMappings(vaultPath: vaultPath)
-    var fileChanges: [String: String] = [:]
+    var mappingStore = try loadTaskMappings(vaultPath: vaultPath)
+    var fileChanges: [String: String] = [:] // Track changes per file
     
     // 4. Compare and sync completion status
     print("Comparing completion status...")
+    
+    // Track reminders to delete
+    var remindersToDelete: [EKReminder] = []
+    
     for mapping in mappingStore.mappings {
         // Find corresponding task and reminder by their IDs
         let task = allTasks.first { task in 
@@ -615,7 +619,11 @@ public func syncCompletedReminders(eventStore: EKEventStore, vaultPath: String) 
         }
         
         if task == nil {
-            print("Warning: Could not find matching task for mapping ID: '\(mapping.obsidianId)'")
+            print("Task not found in vault for mapping ID: '\(mapping.obsidianId)'")
+            if let reminder = reminder {
+                print("Marking reminder for deletion: '\(reminder.title ?? "")'")
+                remindersToDelete.append(reminder)
+            }
             continue
         }
         
@@ -628,7 +636,6 @@ public func syncCompletedReminders(eventStore: EKEventStore, vaultPath: String) 
         
         // If either is completed, mark both as completed
         let shouldBeCompleted = task.isCompleted || reminder.isCompleted
-        print("Task ID '\(task.id)' - Obsidian: \(task.isCompleted), Reminder: \(reminder.isCompleted) -> Should be: \(shouldBeCompleted)")
         
         // Update reminder if needed
         if reminder.isCompleted != shouldBeCompleted {
@@ -683,6 +690,21 @@ public func syncCompletedReminders(eventStore: EKEventStore, vaultPath: String) 
                 }
             }
         }
+    }
+    
+    // Delete reminders for tasks that no longer exist in vault
+    if !remindersToDelete.isEmpty {
+        print("Deleting \(remindersToDelete.count) reminders for tasks that no longer exist in vault...")
+        for reminder in remindersToDelete {
+            try eventStore.remove(reminder, commit: false)
+        }
+        try eventStore.commit()
+        
+        // Remove mappings for deleted reminders
+        mappingStore.mappings.removeAll { mapping in
+            remindersToDelete.contains { $0.calendarItemIdentifier == mapping.reminderId }
+        }
+        try saveTaskMappings(mappingStore, vaultPath: vaultPath)
     }
     
     // Write all file changes
