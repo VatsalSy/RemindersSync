@@ -9,6 +9,10 @@ struct ExportOtherRemindersCLI {
         var excludedLists: Set<String> = [
             "Groceries",
             "Cooking-HouseHold",
+            "India-trip-shopping-list",
+            "Future-shopping-list",
+            "Books-to-listen-Anjali",
+            "Anjali-internship-tasks",
             "obsidian"  // Always exclude obsidian list
         ]
         // Add vault name to excluded lists
