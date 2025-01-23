@@ -558,16 +558,11 @@ public func syncCompletedReminders(eventStore: EKEventStore, vaultPath: String) 
     print("Getting calendar for vault: \(vaultPath)")
     let targetCalendar = try getOrCreateVaultCalendar(for: vaultPath, eventStore: eventStore)
     
-    // 1. Get all tasks from Obsidian and save to JSON
+    // 1. Get all tasks from Obsidian
     print("Finding all tasks in Obsidian...")
     let allTasks = try findAllTasks(in: vaultPath)
-    let taskStates = allTasks.map { TaskState(id: $0.id, text: $0.text, filePath: $0.filePath, isCompleted: $0.isCompleted) }
-    let tasksJsonPath = (vaultPath as NSString).appendingPathComponent("._VaultTasks.json")
-    let taskData = try JSONEncoder().encode(taskStates)
-    try taskData.write(to: URL(fileURLWithPath: tasksJsonPath))
-    print("Saved \(taskStates.count) tasks to \(tasksJsonPath)")
     
-    // 2. Get all reminders and save to JSON
+    // 2. Get all reminders
     print("Getting reminders...")
     let predicate = eventStore.predicateForReminders(in: [targetCalendar])
     let reminders = try await withCheckedThrowingContinuation { continuation in
@@ -584,128 +579,132 @@ public func syncCompletedReminders(eventStore: EKEventStore, vaultPath: String) 
         }
     }
     
-    let reminderStates = reminders.map { reminder in
-        ReminderState(
-            id: reminder.calendarItemIdentifier,
-            text: reminder.title ?? "",
-            isCompleted: reminder.isCompleted
-        )
-    }
-    let remindersJsonPath = (vaultPath as NSString).appendingPathComponent("._Reminders.json")
-    let reminderData = try JSONEncoder().encode(reminderStates)
-    try reminderData.write(to: URL(fileURLWithPath: remindersJsonPath))
-    print("Saved \(reminderStates.count) reminders to \(remindersJsonPath)")
-    
     // 3. Load mappings
     var mappingStore = try loadTaskMappings(vaultPath: vaultPath)
     var fileChanges: [String: String] = [:] // Track changes per file
     
-    // 4. Compare and sync completion status
-    print("Comparing completion status...")
-    
     // Track reminders to delete
     var remindersToDelete: [EKReminder] = []
     
-    for mapping in mappingStore.mappings {
-        // Find corresponding task and reminder by their IDs
-        let task = allTasks.first { task in 
-            print("Comparing task - Mapping ID: '\(mapping.obsidianId)', Task ID: '\(task.id)'")
-            return task.id == mapping.obsidianId
-        }
-        
-        let reminder = reminders.first { reminder in
-            print("Comparing reminder - Mapping ID: '\(mapping.reminderId)', Reminder ID: '\(reminder.calendarItemIdentifier)'")
-            return reminder.calendarItemIdentifier == mapping.reminderId
-        }
-        
-        if task == nil {
-            print("Task not found in vault for mapping ID: '\(mapping.obsidianId)'")
+    // 4. Compare and sync completion status
+    print("Comparing completion status...")
+    
+    // First, handle tasks that exist in Obsidian
+    for task in allTasks {
+        if let mapping = mappingStore.findMapping(obsidianId: task.id) {
+            // Find corresponding reminder
+            let reminder = reminders.first { $0.calendarItemIdentifier == mapping.reminderId }
+            
             if let reminder = reminder {
-                print("Marking reminder for deletion: '\(reminder.title ?? "")'")
-                remindersToDelete.append(reminder)
-            }
-            continue
-        }
-        
-        if reminder == nil {
-            print("Warning: Could not find matching reminder for mapping ID: '\(mapping.reminderId)'")
-            continue
-        }
-        
-        guard let task = task, let reminder = reminder else { continue }
-        
-        // If either is completed, mark both as completed
-        let shouldBeCompleted = task.isCompleted || reminder.isCompleted
-        
-        // Update reminder if needed
-        if reminder.isCompleted != shouldBeCompleted {
-            print("Updating reminder completion status to \(shouldBeCompleted)")
-            reminder.isCompleted = shouldBeCompleted
-            try eventStore.save(reminder, commit: true)
-        }
-        
-        // Update Obsidian task if needed
-        if task.isCompleted != shouldBeCompleted {
-            print("Updating Obsidian task completion status to \(shouldBeCompleted)")
-            let filePath = task.filePath
-            
-            // Load file content if needed
-            if fileChanges[filePath] == nil {
-                guard FileManager.default.fileExists(atPath: filePath) else {
-                    print("Warning: File does not exist: \(filePath)")
-                    continue
-                }
-                fileChanges[filePath] = try String(contentsOfFile: filePath, encoding: .utf8)
-            }
-            
-            if var content = fileChanges[filePath] {
-                let lines = content.components(separatedBy: CharacterSet.newlines)
-                var updatedLines = [String]()
-                var foundTask = false
+                // Both exist - handle completion status
+                let shouldBeCompleted = task.isCompleted || reminder.isCompleted
                 
-                for line in lines {
-                    if line.contains(task.text) {
-                        let currentStatus = line.hasPrefix("- [x]") || line.hasPrefix("- [X]")
-                        if currentStatus != shouldBeCompleted {
-                            print("Updating task in file")
-                            let updatedLine = shouldBeCompleted ?
-                                line.replacingOccurrences(of: "- [ ]", with: "- [x]") :
-                                line.replacingOccurrences(of: "- [x]", with: "- [ ]").replacingOccurrences(of: "- [X]", with: "- [ ]")
-                            updatedLines.append(updatedLine)
-                            foundTask = true
-                        } else {
-                            updatedLines.append(line)
+                // Update reminder if needed
+                if reminder.isCompleted != shouldBeCompleted {
+                    print("Updating reminder completion status to \(shouldBeCompleted)")
+                    reminder.isCompleted = shouldBeCompleted
+                    try eventStore.save(reminder, commit: true)
+                }
+                
+                // Only update Obsidian if it's not completed and reminder is completed
+                if !task.isCompleted && reminder.isCompleted {
+                    print("Updating Obsidian task completion status to completed")
+                    let filePath = task.filePath
+                    
+                    // Load file content if needed
+                    if fileChanges[filePath] == nil {
+                        guard FileManager.default.fileExists(atPath: filePath) else {
+                            print("Warning: File does not exist: \(filePath)")
+                            continue
                         }
-                    } else {
-                        updatedLines.append(line)
+                        fileChanges[filePath] = try String(contentsOfFile: filePath, encoding: .utf8)
+                    }
+                    
+                    if var content = fileChanges[filePath] {
+                        let lines = content.components(separatedBy: CharacterSet.newlines)
+                        var updatedLines = [String]()
+                        var foundTask = false
+                        
+                        for line in lines {
+                            if line.contains(task.text) {
+                                let currentStatus = line.hasPrefix("- [x]") || line.hasPrefix("- [X]")
+                                if !currentStatus {
+                                    print("Updating task in file")
+                                    let updatedLine = line.replacingOccurrences(of: "- [ ]", with: "- [x]")
+                                    updatedLines.append(updatedLine)
+                                    foundTask = true
+                                } else {
+                                    updatedLines.append(line)
+                                }
+                            } else {
+                                updatedLines.append(line)
+                            }
+                        }
+                        
+                        if foundTask {
+                            content = updatedLines.joined(separator: "\n")
+                            fileChanges[filePath] = content
+                            print("Updated content in memory for file: \(filePath)")
+                        }
                     }
                 }
+            } else {
+                // Task exists in Obsidian but not in Reminders - create new reminder
+                print("Creating new reminder for Obsidian task: \(task.text)")
+                let newReminder = EKReminder(eventStore: eventStore)
+                newReminder.calendar = targetCalendar
+                newReminder.title = task.text
+                newReminder.isCompleted = task.isCompleted
                 
-                if foundTask {
-                    content = updatedLines.joined(separator: "\n")
-                    fileChanges[filePath] = content
-                    print("Updated content in memory for file: \(filePath)")
-                } else {
-                    print("Warning: Could not find task line in file: \(filePath)")
+                if let dueDate = task.dueDate {
+                    newReminder.dueDateComponents = Calendar.current.dateComponents([.year, .month, .day], from: dueDate)
                 }
+                
+                var notes = [String]()
+                if let obsidianURL = task.obsidianURL?.absoluteString {
+                    notes.append(obsidianURL)
+                }
+                notes.append("ID: \(task.id)")
+                newReminder.notes = notes.joined(separator: "\n")
+                
+                try eventStore.save(newReminder, commit: true)
+                
+                // Update mapping
+                let newMapping = TaskMapping(
+                    obsidianId: task.id,
+                    reminderId: newReminder.calendarItemIdentifier,
+                    filePath: task.filePath,
+                    taskText: task.text
+                )
+                mappingStore.mappings.append(newMapping)
             }
         }
     }
     
-    // Delete reminders for tasks that no longer exist in vault
+    // Handle reminders that don't exist in Obsidian anymore
+    for reminder in reminders {
+        if let mapping = mappingStore.findMappingByReminderId(reminder.calendarItemIdentifier) {
+            if !allTasks.contains(where: { $0.id == mapping.obsidianId }) {
+                print("Deleting reminder for non-existent Obsidian task: \(reminder.title ?? "")")
+                remindersToDelete.append(reminder)
+                
+                // Remove mapping
+                mappingStore.mappings.removeAll { $0.reminderId == reminder.calendarItemIdentifier }
+            }
+        }
+    }
+    
+    // Delete reminders that don't exist in Obsidian
     if !remindersToDelete.isEmpty {
         print("Deleting \(remindersToDelete.count) reminders for tasks that no longer exist in vault...")
         for reminder in remindersToDelete {
             try eventStore.remove(reminder, commit: false)
         }
         try eventStore.commit()
-        
-        // Remove mappings for deleted reminders
-        mappingStore.mappings.removeAll { mapping in
-            remindersToDelete.contains { $0.calendarItemIdentifier == mapping.reminderId }
-        }
-        try saveTaskMappings(mappingStore, vaultPath: vaultPath)
     }
+    
+    // Save updated mappings
+    try saveTaskMappings(mappingStore, vaultPath: vaultPath)
     
     // Write all file changes
     print("Writing file changes...")
