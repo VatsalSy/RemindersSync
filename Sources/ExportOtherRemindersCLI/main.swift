@@ -13,6 +13,8 @@ struct ExportOtherRemindersCLI {
             "Future-shopping-list",
             "Books-to-listen-Anjali",
             "Anjali-internship-tasks",
+            "GTasks",
+            "Slack-ReadOnly",
             "obsidian"  // Always exclude obsidian list
         ]
         // Add vault name to excluded lists
