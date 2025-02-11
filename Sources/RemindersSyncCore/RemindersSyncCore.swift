@@ -203,7 +203,13 @@ public func findIncompleteTasks(in vaultPath: String) throws -> [ObsidianTask] {
             continue
         }
         
-        let content = try String(contentsOf: fileURL, encoding: .utf8)
+        let content: String
+        do {
+            content = try String(contentsOf: fileURL, encoding: .utf8)
+        } catch {
+            print("Warning: Skipping file \(fileURL.lastPathComponent) - \(error.localizedDescription)")
+            continue
+        }
         var updatedContent = ""
         var contentChanged = false
         let fileBaseName = fileURL.deletingPathExtension().lastPathComponent
@@ -393,7 +399,13 @@ public func findCompletedTasks(in vaultPath: String) throws -> [ObsidianTask] {
             continue
         }
         
-        let content = try String(contentsOf: fileURL, encoding: .utf8)
+        let content: String
+        do {
+            content = try String(contentsOf: fileURL, encoding: .utf8)
+        } catch {
+            print("Warning: Skipping file \(fileURL.lastPathComponent) - \(error.localizedDescription)")
+            continue
+        }
         let range = NSRange(content.startIndex..., in: content)
         
         taskRegex.enumerateMatches(in: content, range: range) { match, _, _ in
@@ -734,7 +746,13 @@ public func findAllTasks(in vaultPath: String) throws -> [ObsidianTask] {
             continue
         }
         
-        let content = try String(contentsOf: fileURL, encoding: .utf8)
+        let content: String
+        do {
+            content = try String(contentsOf: fileURL, encoding: .utf8)
+        } catch {
+            print("Warning: Skipping file \(fileURL.lastPathComponent) - \(error.localizedDescription)")
+            continue
+        }
         let lines = content.components(separatedBy: .newlines)
         
         for line in lines {
@@ -996,7 +1014,13 @@ public func cleanupTaskIds(in vaultPath: String) throws {
             continue
         }
         
-        let content = try String(contentsOf: fileURL, encoding: .utf8)
+        let content: String
+        do {
+            content = try String(contentsOf: fileURL, encoding: .utf8)
+        } catch {
+            print("Warning: Skipping file \(fileURL.lastPathComponent) - \(error.localizedDescription)")
+            continue
+        }
         var updatedContent = ""
         var contentChanged = false
         
