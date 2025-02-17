@@ -197,9 +197,13 @@ public func findIncompleteTasks(in vaultPath: String) throws -> [ObsidianTask] {
     let mappingStore = try loadTaskMappings(vaultPath: vaultPath)
     
     while let fileURL = enumerator?.nextObject() as? URL {
+        // Get path relative to vault
+        let relativePath = fileURL.path.replacingOccurrences(of: vaultPath, with: "")
+        
         guard fileURL.pathExtension == "md",
               fileURL.lastPathComponent != "_AppleReminders.md",
-              !fileURL.lastPathComponent.hasPrefix("._") else {
+              !fileURL.lastPathComponent.hasPrefix("._"),
+              !relativePath.contains("/Templates/") else {
             continue
         }
         
@@ -393,9 +397,13 @@ public func findCompletedTasks(in vaultPath: String) throws -> [ObsidianTask] {
     dateFormatter.dateFormat = "yyyy-MM-dd"
     
     while let fileURL = enumerator?.nextObject() as? URL {
+        // Get path relative to vault
+        let relativePath = fileURL.path.replacingOccurrences(of: vaultPath, with: "")
+        
         guard fileURL.pathExtension == "md",
               fileURL.lastPathComponent != "_AppleReminders.md",
-              !fileURL.lastPathComponent.hasPrefix("._") else {
+              !fileURL.lastPathComponent.hasPrefix("._"),
+              !relativePath.contains("/Templates/") else {
             continue
         }
         
