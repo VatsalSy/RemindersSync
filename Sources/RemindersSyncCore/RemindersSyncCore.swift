@@ -203,7 +203,8 @@ public func findIncompleteTasks(in vaultPath: String) throws -> [ObsidianTask] {
         guard fileURL.pathExtension == "md",
               fileURL.lastPathComponent != "_AppleReminders.md",
               !fileURL.lastPathComponent.hasPrefix("._"),
-              !relativePath.contains("/Templates/") else {
+              !relativePath.contains("/Templates/"),
+              !relativePath.contains("/aiprompts/") else {
             continue
         }
         
@@ -403,7 +404,8 @@ public func findCompletedTasks(in vaultPath: String) throws -> [ObsidianTask] {
         guard fileURL.pathExtension == "md",
               fileURL.lastPathComponent != "_AppleReminders.md",
               !fileURL.lastPathComponent.hasPrefix("._"),
-              !relativePath.contains("/Templates/") else {
+              !relativePath.contains("/Templates/"),
+              !relativePath.contains("/aiprompts/") else {
             continue
         }
         
