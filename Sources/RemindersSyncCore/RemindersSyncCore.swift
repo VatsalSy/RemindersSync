@@ -285,14 +285,17 @@ public func findIncompleteTasks(in vaultPath: String) throws -> [ObsidianTask] {
                                                   .replacingOccurrences(of: " <!-- id: [A-Z0-9-]+ -->", with: "", options: .regularExpression)
                                                   .trimmingCharacters(in: .whitespaces)
                         
-                        tasks.append(ObsidianTask(
-                            id: taskId,
-                            text: cleanTaskText,
-                            dueDate: dueDate,
-                            filePath: fileBaseName + ".md",
-                            vaultPath: vaultPath,
-                            isCompleted: false
-                        ))
+                        // Skip tasks with #cl tag
+                        if !cleanTaskText.contains("#cl") {
+                            tasks.append(ObsidianTask(
+                                id: taskId,
+                                text: cleanTaskText,
+                                dueDate: dueDate,
+                                filePath: fileBaseName + ".md",
+                                vaultPath: vaultPath,
+                                isCompleted: false
+                            ))
+                        }
                     }
                 }
             } else if let match = matches.first {
@@ -350,14 +353,17 @@ public func findIncompleteTasks(in vaultPath: String) throws -> [ObsidianTask] {
                                           .replacingOccurrences(of: " <!-- id: [A-Z0-9-]+ -->", with: "", options: .regularExpression)
                                           .trimmingCharacters(in: .whitespaces)
                 
-                tasks.append(ObsidianTask(
-                    id: taskId,
-                    text: cleanTaskText,
-                    dueDate: dueDate,
-                    filePath: fileBaseName + ".md",
-                    vaultPath: vaultPath,
-                    isCompleted: false
-                ))
+                // Skip tasks with #cl tag
+                if !cleanTaskText.contains("#cl") {
+                    tasks.append(ObsidianTask(
+                        id: taskId,
+                        text: cleanTaskText,
+                        dueDate: dueDate,
+                        filePath: fileBaseName + ".md",
+                        vaultPath: vaultPath,
+                        isCompleted: false
+                    ))
+                }
                 
                 updatedContent += currentLine + "\n"
             } else {
@@ -448,14 +454,17 @@ public func findCompletedTasks(in vaultPath: String) throws -> [ObsidianTask] {
                                       .replacingOccurrences(of: " <!-- id: [A-Z0-9-]+ -->", with: "", options: .regularExpression)
                                       .trimmingCharacters(in: .whitespaces)
             
-            tasks.append(ObsidianTask(
-                id: taskId,
-                text: cleanTaskText,
-                dueDate: dueDate,
-                filePath: fileBaseName + ".md",
-                vaultPath: vaultPath,
-                isCompleted: true
-            ))
+            // Skip tasks with #cl tag
+            if !cleanTaskText.contains("#cl") {
+                tasks.append(ObsidianTask(
+                    id: taskId,
+                    text: cleanTaskText,
+                    dueDate: dueDate,
+                    filePath: fileBaseName + ".md",
+                    vaultPath: vaultPath,
+                    isCompleted: true
+                ))
+            }
         }
     }
     
@@ -789,7 +798,11 @@ public func findAllTasks(in vaultPath: String) throws -> [ObsidianTask] {
                     vaultPath: vaultPath,
                     isCompleted: isCompleted
                 )
-                tasks.append(task)
+                
+                // Skip tasks with #cl tag
+                if !taskText.contains("#cl") {
+                    tasks.append(task)
+                }
             }
         }
     }
