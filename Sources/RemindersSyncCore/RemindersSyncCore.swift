@@ -494,7 +494,11 @@ public func syncTasksFromVault(tasks: [ObsidianTask], eventStore: EKEventStore) 
     
     print("Found \(existingReminders.count) existing reminders")
     
-    for task in tasks {
+    // Filter out tasks containing #cl tag - secondary safety check
+    let filteredTasks = tasks.filter { !$0.text.contains("#cl") }
+    print("Filtered out \(tasks.count - filteredTasks.count) tasks with #cl tag")
+    
+    for task in filteredTasks {
         var reminder: EKReminder?
         
         // First try to find an existing reminder by ID mapping
@@ -591,7 +595,12 @@ public func syncCompletedReminders(eventStore: EKEventStore, vaultPath: String) 
     
     // 1. Get all tasks from Obsidian
     print("Finding all tasks in Obsidian...")
-    let allTasks = try findAllTasks(in: vaultPath)
+    var allTasks = try findAllTasks(in: vaultPath)
+    
+    // Filter out tasks with #cl tag - secondary safety check
+    let originalCount = allTasks.count
+    allTasks = allTasks.filter { !$0.text.contains("#cl") }
+    print("Filtered out \(originalCount - allTasks.count) tasks with #cl tag")
     
     // 2. Get all reminders
     print("Getting reminders...")
