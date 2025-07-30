@@ -18,6 +18,9 @@ swift run ExportOtherReminders /path/to/vault --cleanup  # Clean duplicate IDs
 # Clean vault for fresh sync (removes IDs and completed tasks)
 swift run ReSyncReminders /path/to/vault
 
+# Remove only completed tasks (preserves incomplete tasks with IDs)
+swift run CleanUp /path/to/vault
+
 # Build release version
 swift build -c release
 
@@ -26,7 +29,7 @@ swift build -c release
 
 ## Architecture Overview
 
-RemindersSync is a Swift Package Manager project with four CLI executables sharing a common core library:
+RemindersSync is a Swift Package Manager project with five CLI executables sharing a common core library:
 
 1. **RemindersSyncCore** - Shared library containing all synchronization logic
    - `ObsidianTask` struct for task representation
@@ -52,6 +55,12 @@ RemindersSync is a Swift Package Manager project with four CLI executables shari
    - Removes all task IDs (^ID and <!-- id: ID -->)
    - Removes all completed tasks
    - Deletes all state files (._RemindersMapping.json, ._TaskDB.json, ._ConsolidatedIds.json)
+
+6. **CleanUp** - Remove completed tasks only
+   - Runs RemindersSync first to synchronize systems
+   - Removes completed tasks from vault and Apple Reminders
+   - Preserves incomplete tasks with their IDs
+   - Updates mapping file appropriately
 
 ## Key Implementation Details
 
