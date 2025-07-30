@@ -191,6 +191,23 @@ swift run ExportOtherReminders /path/to/vault     # Export other reminders
 
 For easier access, you can install the tools system-wide:
 
+#### Automated Installation (Recommended)
+
+Use the provided installation script:
+```bash
+cd /path/to/RemindersSync
+sudo ./install.sh
+```
+
+To uninstall:
+```bash
+sudo ./uninstall.sh
+```
+
+#### Manual Installation
+
+If you prefer to install manually:
+
 1. Build a release version:
 ```bash
 cd /path/to/RemindersSync
