@@ -111,9 +111,12 @@ struct CleanUpCLI {
                     
                     // Join lines and clean up extra blank lines
                     var finalContent = newLines.joined(separator: "\n")
-                    while finalContent.contains("\n\n\n") {
-                        finalContent = finalContent.replacingOccurrences(of: "\n\n\n", with: "\n\n")
-                    }
+                    // Replace multiple consecutive newlines with double newlines
+                    finalContent = finalContent.replacingOccurrences(
+                        of: "\n{3,}",
+                        with: "\n\n",
+                        options: .regularExpression
+                    )
                     if !finalContent.isEmpty && !finalContent.hasSuffix("\n") {
                         finalContent += "\n"
                     }

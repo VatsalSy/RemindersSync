@@ -36,19 +36,43 @@ mkdir -p /usr/local/bin
 
 echo -e "\n${YELLOW}Step 3: Installing executables...${NC}"
 
+# Track installation results
+successful_installs=0
+failed_installs=0
+
 # Install each executable
 install_executable() {
     local exe_name=$1
     local system_name=$2
+    local source_path=".build/release/$exe_name"
+    local dest_path="/usr/local/bin/$system_name"
     
-    if [ -f ".build/release/$exe_name" ]; then
-        echo "Installing $exe_name as $system_name..."
-        cp ".build/release/$exe_name" "/usr/local/bin/$system_name"
-        chmod +x "/usr/local/bin/$system_name"
-        echo -e "  ${GREEN}✓${NC} $system_name installed"
-    else
+    # Check if source file exists
+    if [ ! -f "$source_path" ]; then
         echo -e "  ${RED}✗${NC} $exe_name not found in .build/release/"
+        ((failed_installs++))
+        return 1
     fi
+    
+    echo "Installing $exe_name as $system_name..."
+    
+    # Copy executable
+    if ! cp "$source_path" "$dest_path"; then
+        echo -e "  ${RED}✗${NC} Failed to copy $exe_name to $dest_path"
+        ((failed_installs++))
+        return 1
+    fi
+    
+    # Set permissions
+    if ! chmod +x "$dest_path"; then
+        echo -e "  ${RED}✗${NC} Failed to set permissions for $system_name"
+        ((failed_installs++))
+        return 1
+    fi
+    
+    echo -e "  ${GREEN}✓${NC} $system_name installed successfully"
+    ((successful_installs++))
+    return 0
 }
 
 # Install all executables
@@ -58,7 +82,18 @@ install_executable "ExportOtherReminders" "obsidian-export"
 install_executable "ReSyncReminders" "obsidian-resync"
 install_executable "CleanUp" "obsidian-cleanup"
 
-echo -e "\n${GREEN}Installation complete!${NC}"
+# Summary
+echo ""
+if [ $failed_installs -eq 0 ]; then
+    echo -e "${GREEN}Installation complete!${NC}"
+    echo "Successfully installed $successful_installs executable(s)."
+else
+    echo -e "${YELLOW}Installation completed with issues:${NC}"
+    echo "  Successful: $successful_installs"
+    echo "  Failed: $failed_installs"
+    echo ""
+    echo -e "${YELLOW}Please check the error messages above.${NC}"
+fi
 echo -e "\nYou can now use the following commands from anywhere:"
 echo "  obsidian-reminders /path/to/vault  # Full two-way sync"
 echo "  obsidian-scan /path/to/vault       # One-way sync"

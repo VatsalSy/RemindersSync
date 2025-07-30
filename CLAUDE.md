@@ -27,6 +27,21 @@ swift build -c release
 # No test targets defined yet
 ```
 
+## Testing Strategy
+
+Future testing implementation will include:
+- **Unit Tests**: Using XCTest framework for testing individual components in RemindersSyncCore
+- **Integration Tests**: Testing synchronization between Obsidian and Apple Reminders
+- **Mock EventKit**: Creating mock EventKit objects for testing without actual calendar access
+- **File System Tests**: Testing file operations with temporary directories
+- **Command Line Tests**: Testing CLI argument parsing and error handling
+
+To run tests (when implemented):
+```bash
+swift test
+swift test --filter RemindersSyncTests.testSpecificFunction
+```
+
 ## Architecture Overview
 
 RemindersSync is a Swift Package Manager project with five CLI executables sharing a common core library:

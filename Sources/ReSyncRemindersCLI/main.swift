@@ -46,7 +46,10 @@ let enumerator = fileManager.enumerator(
 
 while let fileURL = enumerator?.nextObject() as? URL {
     // Skip non-markdown files and special files
-    let relativePath = fileURL.path.replacingOccurrences(of: vaultPath, with: "")
+    let vaultURL = URL(fileURLWithPath: vaultPath)
+    let relativePath = fileURL.path.hasPrefix(vaultURL.path) 
+        ? String(fileURL.path.dropFirst(vaultURL.path.count))
+        : fileURL.path
     guard fileURL.pathExtension == "md",
           !fileURL.lastPathComponent.hasPrefix("._"),
           fileURL.lastPathComponent != "_AppleReminders.md",
@@ -88,10 +91,12 @@ while let fileURL = enumerator?.nextObject() as? URL {
             filesProcessed += 1
             // Join lines and clean up extra blank lines
             var finalContent = newLines.joined(separator: "\n")
-            // Remove multiple consecutive blank lines
-            while finalContent.contains("\n\n\n") {
-                finalContent = finalContent.replacingOccurrences(of: "\n\n\n", with: "\n\n")
-            }
+            // Replace multiple consecutive newlines with double newlines
+            finalContent = finalContent.replacingOccurrences(
+                of: "\n{3,}",
+                with: "\n\n",
+                options: .regularExpression
+            )
             // Ensure file ends with single newline
             if !finalContent.isEmpty && !finalContent.hasSuffix("\n") {
                 finalContent += "\n"
