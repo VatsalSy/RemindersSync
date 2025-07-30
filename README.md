@@ -24,7 +24,7 @@ If you encounter any problems or have suggestions, please open an issue on GitHu
 
 ## Available Commands
 
-The package includes three command-line tools:
+The package includes four command-line tools:
 
 ### 1. RemindersSync
 
@@ -67,6 +67,22 @@ swift run ExportOtherReminders /path/to/vault --cleanup
 
 # Get help with options
 swift run ExportOtherReminders --help
+```
+
+### 4. ReSyncReminders
+
+**Clean vault and prepare for fresh sync**
+- Removes all task IDs (^ID and <!-- id: ID -->) from vault
+- Removes all completed tasks (- [x] or - [X])
+- Deletes the mapping file (._RemindersMapping.json)
+- Prepares vault for a completely fresh sync
+
+```bash
+# Clean vault for fresh sync
+swift run ReSyncReminders /path/to/vault
+
+# After running, use RemindersSync to complete the fresh sync
+swift run RemindersSync /path/to/vault
 ```
 
 ## Task Filtering
@@ -169,6 +185,7 @@ sudo mkdir -p /usr/local/bin
 sudo cp .build/release/RemindersSync /usr/local/bin/obsidian-reminders
 sudo cp .build/release/ScanVault /usr/local/bin/obsidian-scan
 sudo cp .build/release/ExportOtherReminders /usr/local/bin/obsidian-export
+sudo cp .build/release/ReSyncReminders /usr/local/bin/obsidian-resync
 ```
 
 3. Make them executable:
@@ -176,6 +193,7 @@ sudo cp .build/release/ExportOtherReminders /usr/local/bin/obsidian-export
 sudo chmod +x /usr/local/bin/obsidian-reminders
 sudo chmod +x /usr/local/bin/obsidian-scan
 sudo chmod +x /usr/local/bin/obsidian-export
+sudo chmod +x /usr/local/bin/obsidian-resync
 ```
 
 Now you can run any of the tools from anywhere:
@@ -183,6 +201,7 @@ Now you can run any of the tools from anywhere:
 obsidian-reminders /path/to/vault  # Full two-way sync
 obsidian-scan /path/to/vault       # One-way sync
 obsidian-export /path/to/vault     # Export only
+obsidian-resync /path/to/vault     # Clean vault for fresh sync
 ```
 
 ### Optional: Create Aliases
@@ -192,6 +211,7 @@ Add these to your `~/.zshrc` or `~/.bashrc`:
 alias sync-obsidian='obsidian-reminders "/Users/your-username/path/to/your/vault"'
 alias scan-obsidian='obsidian-scan "/Users/your-username/path/to/your/vault"'
 alias export-reminders='obsidian-export "/Users/your-username/path/to/your/vault"'
+alias resync-obsidian='obsidian-resync "/Users/your-username/path/to/your/vault"'
 ```
 
 Then run:
@@ -204,6 +224,7 @@ Now you can simply type:
 sync-obsidian      # Full two-way sync
 scan-obsidian      # One-way sync
 export-reminders   # Export only
+resync-obsidian    # Clean vault for fresh sync
 ```
 
 ## Permissions Note

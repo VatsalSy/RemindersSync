@@ -12,6 +12,7 @@ let package = Package(
         .executable(name: "RemindersSync", targets: ["SwiftRemindersCLI"]),
         .executable(name: "ScanVault", targets: ["ScanVaultCLI"]),
         .executable(name: "ExportOtherReminders", targets: ["ExportOtherRemindersCLI"]),
+        .executable(name: "ReSyncReminders", targets: ["ReSyncRemindersCLI"]),
         .library(name: "RemindersSyncCore", targets: ["RemindersSyncCore"])
     ],
     targets: [
@@ -38,6 +39,13 @@ let package = Package(
         ),
         .executableTarget(
             name: "ExportOtherRemindersCLI",
+            dependencies: ["RemindersSyncCore"],
+            linkerSettings: [
+                .linkedFramework("EventKit")
+            ]
+        ),
+        .executableTarget(
+            name: "ReSyncRemindersCLI",
             dependencies: ["RemindersSyncCore"],
             linkerSettings: [
                 .linkedFramework("EventKit")
