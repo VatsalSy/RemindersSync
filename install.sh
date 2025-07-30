@@ -38,27 +38,27 @@ mkdir -p /usr/local/bin
 
 echo -e "\n${YELLOW}Step 3: Installing executables...${NC}"
 
-# Define the mapping of executables to their system names
-declare -A executables=(
-    ["RemindersSync"]="obsidian-reminders"
-    ["ScanVault"]="obsidian-scan"
-    ["ExportOtherReminders"]="obsidian-export"
-    ["ReSyncReminders"]="obsidian-resync"
-    ["CleanUp"]="obsidian-cleanup"
-)
-
 # Install each executable
-for exe in "${!executables[@]}"; do
-    system_name="${executables[$exe]}"
-    if [ -f ".build/release/$exe" ]; then
-        echo "Installing $exe as $system_name..."
-        cp ".build/release/$exe" "/usr/local/bin/$system_name"
+install_executable() {
+    local exe_name=$1
+    local system_name=$2
+    
+    if [ -f ".build/release/$exe_name" ]; then
+        echo "Installing $exe_name as $system_name..."
+        cp ".build/release/$exe_name" "/usr/local/bin/$system_name"
         chmod +x "/usr/local/bin/$system_name"
         echo -e "  ${GREEN}✓${NC} $system_name installed"
     else
-        echo -e "  ${RED}✗${NC} $exe not found in .build/release/"
+        echo -e "  ${RED}✗${NC} $exe_name not found in .build/release/"
     fi
-done
+}
+
+# Install all executables
+install_executable "RemindersSync" "obsidian-reminders"
+install_executable "ScanVault" "obsidian-scan"
+install_executable "ExportOtherReminders" "obsidian-export"
+install_executable "ReSyncReminders" "obsidian-resync"
+install_executable "CleanUp" "obsidian-cleanup"
 
 echo -e "\n${GREEN}Installation complete!${NC}"
 echo -e "\nYou can now use the following commands from anywhere:"
