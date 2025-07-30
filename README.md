@@ -74,7 +74,7 @@ swift run ExportOtherReminders --help
 **Clean vault and prepare for fresh sync**
 - Removes all task IDs (^ID and <!-- id: ID -->) from vault
 - Removes all completed tasks (- [x] or - [X])
-- Deletes the mapping file (._RemindersMapping.json)
+- Deletes all state files (._RemindersMapping.json, ._TaskDB.json, ._ConsolidatedIds.json)
 - Prepares vault for a completely fresh sync
 
 ```bash

@@ -51,7 +51,7 @@ RemindersSync is a Swift Package Manager project with four CLI executables shari
 5. **ReSyncReminders** - Clean vault for fresh sync
    - Removes all task IDs (^ID and <!-- id: ID -->)
    - Removes all completed tasks
-   - Deletes mapping file for fresh start
+   - Deletes all state files (._RemindersMapping.json, ._TaskDB.json, ._ConsolidatedIds.json)
 
 ## Key Implementation Details
 

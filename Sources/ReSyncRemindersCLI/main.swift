@@ -9,7 +9,7 @@ if args.count != 2 {
     print("\nThis tool will:")
     print("  - Remove all task IDs (^ID and <!-- id: ID -->)")
     print("  - Remove all completed tasks (- [x] or - [X])")
-    print("  - Remove the mapping file (._RemindersMapping.json)")
+    print("  - Remove all state files (._RemindersMapping.json, ._TaskDB.json, ._ConsolidatedIds.json)")
     print("  - Prepare vault for fresh sync with Apple Reminders")
     exit(1)
 }
@@ -95,15 +95,29 @@ while let fileURL = enumerator?.nextObject() as? URL {
     }
 }
 
-// Also remove the mapping file to ensure fresh sync
-let mappingFile = (vaultPath as NSString).appendingPathComponent("._RemindersMapping.json")
-if fileManager.fileExists(atPath: mappingFile) {
-    do {
-        try fileManager.removeItem(atPath: mappingFile)
-        print("✓ Removed mapping file")
-    } catch {
-        print("Warning: Could not remove mapping file: \(error)")
+// Remove all state files to ensure fresh sync
+let stateFiles = [
+    "._RemindersMapping.json",
+    "._TaskDB.json", 
+    "._ConsolidatedIds.json"
+]
+
+var removedFiles = 0
+for stateFile in stateFiles {
+    let filePath = (vaultPath as NSString).appendingPathComponent(stateFile)
+    if fileManager.fileExists(atPath: filePath) {
+        do {
+            try fileManager.removeItem(atPath: filePath)
+            removedFiles += 1
+            print("✓ Removed \(stateFile)")
+        } catch {
+            print("Warning: Could not remove \(stateFile): \(error)")
+        }
     }
+}
+
+if removedFiles > 0 {
+    print("✓ Removed \(removedFiles) state file(s)")
 }
 
 print("\n✅ Vault prepared for resync!")
