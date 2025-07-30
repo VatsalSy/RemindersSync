@@ -26,9 +26,7 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$SCRIPT_DIR"
 
 echo -e "\n${YELLOW}Step 1: Building release version...${NC}"
-swift build -c release
-
-if [ $? -ne 0 ]; then
+if ! swift build -c release; then
     echo -e "${RED}Build failed! Please check the error messages above.${NC}"
     exit 1
 fi

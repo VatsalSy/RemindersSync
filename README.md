@@ -72,6 +72,7 @@ swift run ExportOtherReminders --help
 ### 4. ReSyncReminders
 
 **Clean vault and prepare for fresh sync**
+
 - Removes all task IDs (^ID and <!-- id: ID -->) from vault
 - Removes all completed tasks (- [x] or - [X])
 - Deletes all state files (._RemindersMapping.json, ._TaskDB.json, ._ConsolidatedIds.json)
@@ -88,6 +89,7 @@ swift run RemindersSync /path/to/vault
 ### 5. CleanUp
 
 **Remove only completed tasks while preserving incomplete ones**
+
 - First runs RemindersSync to ensure systems are synchronized
 - Removes all completed tasks from Obsidian vault
 - Removes corresponding completed reminders from Apple Reminders
@@ -100,6 +102,7 @@ swift run CleanUp /path/to/vault
 ```
 
 This is different from ReSyncReminders:
+
 - **CleanUp**: Removes only completed tasks, keeps incomplete tasks with IDs
 - **ReSyncReminders**: Removes ALL tasks and IDs for a fresh start
 
@@ -194,12 +197,14 @@ For easier access, you can install the tools system-wide:
 #### Automated Installation (Recommended)
 
 Use the provided installation script:
+
 ```bash
 cd /path/to/RemindersSync
 sudo ./install.sh
 ```
 
 To uninstall:
+
 ```bash
 sudo ./uninstall.sh
 ```

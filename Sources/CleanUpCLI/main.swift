@@ -74,7 +74,7 @@ struct CleanUpCLI {
             options: [.skipsHiddenFiles]
         )
         
-        let completedTaskPattern = #"^- \[[xX]\] .+$"#
+        let completedTaskPattern = #"^\s*- \[[xX]\] .+$"#
         let completedRegex = try NSRegularExpression(pattern: completedTaskPattern, options: .anchorsMatchLines)
         
         var totalRemoved = 0

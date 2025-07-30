@@ -21,8 +21,16 @@ let fileManager = FileManager.default
 let completedTaskPattern = #"^- \[[xX]\] .+$"#
 let taskWithIdPattern = #"(- \[[ xX]\] .+?)(?:\s*(?:\^[A-Z0-9-]+|<!-- id: [A-Z0-9-]+ -->))$"#
 
-let completedRegex = try! NSRegularExpression(pattern: completedTaskPattern, options: .anchorsMatchLines)
-let idRegex = try! NSRegularExpression(pattern: taskWithIdPattern, options: .anchorsMatchLines)
+let completedRegex: NSRegularExpression
+let idRegex: NSRegularExpression
+
+do {
+    completedRegex = try NSRegularExpression(pattern: completedTaskPattern, options: .anchorsMatchLines)
+    idRegex = try NSRegularExpression(pattern: taskWithIdPattern, options: .anchorsMatchLines)
+} catch {
+    print("Error creating regular expressions: \(error)")
+    exit(1)
+}
 
 var filesProcessed = 0
 var completedTasksRemoved = 0
