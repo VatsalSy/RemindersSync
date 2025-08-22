@@ -5,9 +5,10 @@ import CryptoKit
 // Helper function for token-aware #cl tag detection
 public func containsClTag(_ text: String) -> Bool {
     // Pattern matches #cl only when it's a standalone tag
-    // Preceded by: start of string or whitespace
-    // Followed by: end of string, whitespace, or punctuation
-    let pattern = #"(?:^|\s)#cl(?:$|\s|[.,;:!?\)])"#
+    // Uses negative lookbehind/lookahead to ensure #cl is not part of a word or hashtag
+    // (?:^|[^#\w]) - start of string OR not preceded by # or word character
+    // (?![#\w]) - not followed by # or word character
+    let pattern = #"(?:^|[^#\w])#cl(?![#\w])"#
     return text.range(of: pattern, options: .regularExpression) != nil
 }
 
