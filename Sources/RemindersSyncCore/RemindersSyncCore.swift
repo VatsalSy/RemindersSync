@@ -210,6 +210,12 @@ public func findIncompleteTasks(in vaultPath: String) throws -> [ObsidianTask] {
         // Get path relative to vault
         let relativePath = fileURL.path.replacingOccurrences(of: vaultPath, with: "")
         
+        // Normalize path by removing leading slash for consistent mapping keys
+        var normalizedPath = relativePath
+        if normalizedPath.hasPrefix("/") {
+            normalizedPath = String(normalizedPath.dropFirst())
+        }
+        
         guard fileURL.pathExtension == "md",
               fileURL.lastPathComponent != "_AppleReminders.md",
               !fileURL.lastPathComponent.hasPrefix("._"),
@@ -227,7 +233,6 @@ public func findIncompleteTasks(in vaultPath: String) throws -> [ObsidianTask] {
         }
         var updatedContent = ""
         var contentChanged = false
-        let fileBaseName = fileURL.deletingPathExtension().lastPathComponent
         
         // Process the file line by line
         let lines = content.components(separatedBy: .newlines)
@@ -276,7 +281,7 @@ public func findIncompleteTasks(in vaultPath: String) throws -> [ObsidianTask] {
                         taskId = String(line[idRange])
                     } else {
                         // Generate new ID if none exists (only for non-#cl tasks)
-                        if let existingMapping = mappingStore.findMapping(filePath: fileBaseName + ".md", taskText: cleanTaskText) {
+                        if let existingMapping = mappingStore.findMapping(filePath: normalizedPath, taskText: cleanTaskText) {
                             taskId = existingMapping.obsidianId
                         } else {
                             taskId = UUID().uuidString
@@ -300,7 +305,7 @@ public func findIncompleteTasks(in vaultPath: String) throws -> [ObsidianTask] {
                         id: taskId,
                         text: cleanTaskText,
                         dueDate: dueDate,
-                        filePath: fileBaseName + ".md",
+                        filePath: normalizedPath,
                         vaultPath: vaultPath,
                         isCompleted: false
                     ))
@@ -344,7 +349,7 @@ public func findIncompleteTasks(in vaultPath: String) throws -> [ObsidianTask] {
                         taskId = String(line[idRange])
                     } else {
                         // Generate new ID if none exists (only for non-#cl tasks)
-                        if let existingMapping = mappingStore.findMapping(filePath: fileBaseName + ".md", taskText: cleanTaskText) {
+                        if let existingMapping = mappingStore.findMapping(filePath: normalizedPath, taskText: cleanTaskText) {
                             taskId = existingMapping.obsidianId
                         } else {
                             taskId = UUID().uuidString
@@ -365,7 +370,7 @@ public func findIncompleteTasks(in vaultPath: String) throws -> [ObsidianTask] {
                         id: taskId,
                         text: cleanTaskText,
                         dueDate: dueDate,
-                        filePath: fileBaseName + ".md",
+                        filePath: normalizedPath,
                         vaultPath: vaultPath,
                         isCompleted: false
                     ))
@@ -413,6 +418,12 @@ public func findCompletedTasks(in vaultPath: String) throws -> [ObsidianTask] {
         // Get path relative to vault
         let relativePath = fileURL.path.replacingOccurrences(of: vaultPath, with: "")
         
+        // Normalize path by removing leading slash for consistent mapping keys
+        var normalizedPath = relativePath
+        if normalizedPath.hasPrefix("/") {
+            normalizedPath = String(normalizedPath.dropFirst())
+        }
+        
         guard fileURL.pathExtension == "md",
               fileURL.lastPathComponent != "_AppleReminders.md",
               !fileURL.lastPathComponent.hasPrefix("._"),
@@ -453,7 +464,6 @@ public func findCompletedTasks(in vaultPath: String) throws -> [ObsidianTask] {
                 dueDate = dateFormatter.date(from: String(taskLine[dateRange]))
             }
             
-            let fileBaseName = fileURL.deletingPathExtension().lastPathComponent
             let cleanTaskText = taskLine.replacingOccurrences(of: " 📅 \\d{4}-\\d{2}-\\d{2}", with: "", options: .regularExpression)
                                       .replacingOccurrences(of: " ⏳ \\d{4}-\\d{2}-\\d{2}", with: "", options: .regularExpression)
                                       .replacingOccurrences(of: " \\^[A-Z0-9-]+", with: "", options: .regularExpression)
@@ -466,7 +476,7 @@ public func findCompletedTasks(in vaultPath: String) throws -> [ObsidianTask] {
                     id: taskId,
                     text: cleanTaskText,
                     dueDate: dueDate,
-                    filePath: fileBaseName + ".md",
+                    filePath: normalizedPath,
                     vaultPath: vaultPath,
                     isCompleted: true
                 ))
