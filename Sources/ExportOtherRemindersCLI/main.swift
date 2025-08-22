@@ -262,7 +262,7 @@ struct ExportOtherRemindersCLI {
             }
             
             // Skip tasks with #cl tag (Obsidian-only checklist items)
-            if text.contains("#cl") {
+            if containsClTag(text) {
                 continue
             }
             
@@ -784,7 +784,7 @@ struct ExportOtherRemindersCLI {
             }
             
             // Skip tasks with #cl tag (Obsidian-only checklist items)
-            if cleanedLine.contains("#cl") {
+            if containsClTag(cleanedLine) {
                 // Don't add this line back to the content since it's #cl only
                 continue
             }

@@ -2,6 +2,15 @@ import Foundation
 import EventKit
 import CryptoKit
 
+// Helper function for token-aware #cl tag detection
+public func containsClTag(_ text: String) -> Bool {
+    // Pattern matches #cl only when it's a standalone tag
+    // Preceded by: start of string or whitespace
+    // Followed by: end of string, whitespace, or punctuation
+    let pattern = #"(?:^|\s)#cl(?:$|\s|[.,;:!?\)])"#
+    return text.range(of: pattern, options: .regularExpression) != nil
+}
+
 public struct ObsidianTask {
     public let id: String  // UUID for the task
     public let text: String
@@ -251,7 +260,7 @@ public func findIncompleteTasks(in vaultPath: String) throws -> [ObsidianTask] {
                                               .trimmingCharacters(in: .whitespaces)
                     
                     // Skip #cl tasks - don't assign IDs to them
-                    if cleanTaskText.contains("#cl") {
+                    if containsClTag(cleanTaskText) {
                         // Keep original task line without ID for #cl tasks
                         updatedContent += "- [ ] \(taskLine)\n"
                         continue
@@ -323,7 +332,7 @@ public func findIncompleteTasks(in vaultPath: String) throws -> [ObsidianTask] {
                 var taskId: String = ""
                 
                 // Skip #cl tasks - don't assign IDs to them
-                if cleanTaskText.contains("#cl") {
+                if containsClTag(cleanTaskText) {
                     // Keep original line without ID for #cl tasks
                     currentLine = line
                 } else {
@@ -451,7 +460,7 @@ public func findCompletedTasks(in vaultPath: String) throws -> [ObsidianTask] {
                                       .trimmingCharacters(in: .whitespaces)
             
             // Skip tasks with #cl tag
-            if !cleanTaskText.contains("#cl") {
+            if !containsClTag(cleanTaskText) {
                 tasks.append(ObsidianTask(
                     id: taskId,
                     text: cleanTaskText,
@@ -491,7 +500,7 @@ public func syncTasksFromVault(tasks: [ObsidianTask], eventStore: EKEventStore) 
     print("Found \(existingReminders.count) existing reminders")
     
     // Filter out tasks containing #cl tag - secondary safety check
-    let filteredTasks = tasks.filter { !$0.text.contains("#cl") }
+    let filteredTasks = tasks.filter { !containsClTag($0.text) }
     print("Filtered out \(tasks.count - filteredTasks.count) tasks with #cl tag")
     
     for task in filteredTasks {
@@ -595,7 +604,7 @@ public func syncCompletedReminders(eventStore: EKEventStore, vaultPath: String) 
     
     // Filter out tasks with #cl tag - secondary safety check
     let originalCount = allTasks.count
-    allTasks = allTasks.filter { !$0.text.contains("#cl") }
+    allTasks = allTasks.filter { !containsClTag($0.text) }
     print("Filtered out \(originalCount - allTasks.count) tasks with #cl tag")
     
     // 2. Get all reminders
@@ -805,7 +814,7 @@ public func findAllTasks(in vaultPath: String) throws -> [ObsidianTask] {
                 )
                 
                 // Skip tasks with #cl tag
-                if !taskText.contains("#cl") {
+                if !containsClTag(taskText) {
                     tasks.append(task)
                 }
             }
