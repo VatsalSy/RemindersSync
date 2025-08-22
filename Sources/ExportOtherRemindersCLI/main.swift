@@ -261,6 +261,11 @@ struct ExportOtherRemindersCLI {
                 text = String(text.dropFirst()).trimmingCharacters(in: .whitespaces)
             }
             
+            // Skip tasks with #cl tag (Obsidian-only checklist items)
+            if text.contains("#cl") {
+                continue
+            }
+            
             // Extract UUID if present
             if let id = extractIdFromNotes(text) {
                 // Remove the ID from the text
@@ -776,6 +781,12 @@ struct ExportOtherRemindersCLI {
             // Remove any leading "]" if present
             if cleanedLine.hasPrefix("]") {
                 cleanedLine = String(cleanedLine.dropFirst()).trimmingCharacters(in: .whitespaces)
+            }
+            
+            // Skip tasks with #cl tag (Obsidian-only checklist items)
+            if cleanedLine.contains("#cl") {
+                // Don't add this line back to the content since it's #cl only
+                continue
             }
             
             // Extract due date if present
