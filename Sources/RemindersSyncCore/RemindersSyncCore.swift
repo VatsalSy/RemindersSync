@@ -2,6 +2,16 @@ import Foundation
 import EventKit
 import CryptoKit
 
+// Helper function for token-aware #cl tag detection
+public func containsClTag(_ text: String) -> Bool {
+    // Pattern matches #cl only when it's a standalone tag
+    // Uses negative lookbehind/lookahead to ensure #cl is not part of a word or hashtag
+    // (?:^|[^#\w]) - start of string OR not preceded by # or word character
+    // (?![#\w]) - not followed by # or word character
+    let pattern = #"(?:^|[^#\w])#cl(?![#\w])"#
+    return text.range(of: pattern, options: .regularExpression) != nil
+}
+
 public struct ObsidianTask {
     public let id: String  // UUID for the task
     public let text: String
@@ -200,6 +210,12 @@ public func findIncompleteTasks(in vaultPath: String) throws -> [ObsidianTask] {
         // Get path relative to vault
         let relativePath = fileURL.path.replacingOccurrences(of: vaultPath, with: "")
         
+        // Normalize path by removing leading slash for consistent mapping keys
+        var normalizedPath = relativePath
+        if normalizedPath.hasPrefix("/") {
+            normalizedPath = String(normalizedPath.dropFirst())
+        }
+        
         guard fileURL.pathExtension == "md",
               fileURL.lastPathComponent != "_AppleReminders.md",
               !fileURL.lastPathComponent.hasPrefix("._"),
@@ -217,7 +233,6 @@ public func findIncompleteTasks(in vaultPath: String) throws -> [ObsidianTask] {
         }
         var updatedContent = ""
         var contentChanged = false
-        let fileBaseName = fileURL.deletingPathExtension().lastPathComponent
         
         // Process the file line by line
         let lines = content.components(separatedBy: .newlines)
@@ -242,6 +257,21 @@ public func findIncompleteTasks(in vaultPath: String) throws -> [ObsidianTask] {
                     if isCompleted { continue }
                     
                     let taskLine = String(line[taskRange])
+                    
+                    // Clean task text to check for #cl tag first
+                    let cleanTaskText = taskLine.replacingOccurrences(of: " 📅 \\d{4}-\\d{2}-\\d{2}", with: "", options: .regularExpression)
+                                              .replacingOccurrences(of: " ⏳ \\d{4}-\\d{2}-\\d{2}", with: "", options: .regularExpression)
+                                              .replacingOccurrences(of: " \\^[A-Z0-9-]+", with: "", options: .regularExpression)
+                                              .replacingOccurrences(of: " <!-- id: [A-Z0-9-]+ -->", with: "", options: .regularExpression)
+                                              .trimmingCharacters(in: .whitespaces)
+                    
+                    // Skip #cl tasks - don't assign IDs to them
+                    if containsClTag(cleanTaskText) {
+                        // Keep original task line without ID for #cl tasks
+                        updatedContent += "- [ ] \(taskLine)\n"
+                        continue
+                    }
+                    
                     var taskId: String
                     
                     // Check for existing ID in either format
@@ -250,53 +280,35 @@ public func findIncompleteTasks(in vaultPath: String) throws -> [ObsidianTask] {
                     } else if let idRange = Range(match.range(at: 4), in: line) {
                         taskId = String(line[idRange])
                     } else {
-                        // Generate new ID if none exists
-                        let cleanTaskText = taskLine.replacingOccurrences(of: " 📅 \\d{4}-\\d{2}-\\d{2}", with: "", options: .regularExpression)
-                                                  .replacingOccurrences(of: " ⏳ \\d{4}-\\d{2}-\\d{2}", with: "", options: .regularExpression)
-                                                  .replacingOccurrences(of: " \\^[A-Z0-9-]+", with: "", options: .regularExpression)
-                                                  .replacingOccurrences(of: " <!-- id: [A-Z0-9-]+ -->", with: "", options: .regularExpression)
-                                                  .trimmingCharacters(in: .whitespaces)
-                        
-                        if let existingMapping = mappingStore.findMapping(filePath: fileBaseName + ".md", taskText: cleanTaskText) {
+                        // Generate new ID if none exists (only for non-#cl tasks)
+                        if let existingMapping = mappingStore.findMapping(filePath: normalizedPath, taskText: cleanTaskText) {
                             taskId = existingMapping.obsidianId
                         } else {
                             taskId = UUID().uuidString
                         }
                     }
                     
-                    // Create a new line for this task
+                    // Create a new line for this task (only for non-#cl tasks)
                     let newTaskLine = "- [ ] \(taskLine) ^\(taskId)"
                     updatedContent += newTaskLine + "\n"
                     contentChanged = true
                     
-                    // Add task to the list
-                    if let taskRange = Range(match.range(at: 2), in: line) {
-                        let taskText = String(line[taskRange])
-                        var dueDate: Date? = nil
-                        
-                        if let dateMatch = dateRegex.firstMatch(in: taskText, range: NSRange(taskText.startIndex..., in: taskText)),
-                           let dateRange = Range(dateMatch.range(at: 1), in: taskText) {
-                            dueDate = dateFormatter.date(from: String(taskText[dateRange]))
-                        }
-                        
-                        let cleanTaskText = taskText.replacingOccurrences(of: " 📅 \\d{4}-\\d{2}-\\d{2}", with: "", options: .regularExpression)
-                                                  .replacingOccurrences(of: " ⏳ \\d{4}-\\d{2}-\\d{2}", with: "", options: .regularExpression)
-                                                  .replacingOccurrences(of: " \\^[A-Z0-9-]+", with: "", options: .regularExpression)
-                                                  .replacingOccurrences(of: " <!-- id: [A-Z0-9-]+ -->", with: "", options: .regularExpression)
-                                                  .trimmingCharacters(in: .whitespaces)
-                        
-                        // Skip tasks with #cl tag
-                        if !cleanTaskText.contains("#cl") {
-                            tasks.append(ObsidianTask(
-                                id: taskId,
-                                text: cleanTaskText,
-                                dueDate: dueDate,
-                                filePath: fileBaseName + ".md",
-                                vaultPath: vaultPath,
-                                isCompleted: false
-                            ))
-                        }
+                    // Add task to the list (we already know it's not a #cl task)
+                    var dueDate: Date? = nil
+                    if let dateMatch = dateRegex.firstMatch(in: taskLine, range: NSRange(taskLine.startIndex..., in: taskLine)),
+                       let dateRange = Range(dateMatch.range(at: 1), in: taskLine) {
+                        dueDate = dateFormatter.date(from: String(taskLine[dateRange]))
                     }
+                    
+                    // Use the cleanTaskText we already computed above
+                    tasks.append(ObsidianTask(
+                        id: taskId,
+                        text: cleanTaskText,
+                        dueDate: dueDate,
+                        filePath: normalizedPath,
+                        vaultPath: vaultPath,
+                        isCompleted: false
+                    ))
                 }
             } else if let match = matches.first {
                 // Single task in the line - process normally
@@ -315,51 +327,50 @@ public func findIncompleteTasks(in vaultPath: String) throws -> [ObsidianTask] {
                 }
                 
                 let taskLine = String(line[taskRange])
-                var taskId: String
                 
-                // Check for existing ID in either format
-                if let idRange = Range(match.range(at: 3), in: line) {
-                    taskId = String(line[idRange])
-                } else if let idRange = Range(match.range(at: 4), in: line) {
-                    taskId = String(line[idRange])
-                } else {
-                    // Generate new ID if none exists
-                    let cleanTaskText = taskLine.replacingOccurrences(of: " 📅 \\d{4}-\\d{2}-\\d{2}", with: "", options: .regularExpression)
-                                              .replacingOccurrences(of: " ⏳ \\d{4}-\\d{2}-\\d{2}", with: "", options: .regularExpression)
-                                              .replacingOccurrences(of: " \\^[A-Z0-9-]+", with: "", options: .regularExpression)
-                                              .replacingOccurrences(of: " <!-- id: [A-Z0-9-]+ -->", with: "", options: .regularExpression)
-                                              .trimmingCharacters(in: .whitespaces)
-                    
-                    if let existingMapping = mappingStore.findMapping(filePath: fileBaseName + ".md", taskText: cleanTaskText) {
-                        taskId = existingMapping.obsidianId
-                    } else {
-                        taskId = UUID().uuidString
-                    }
-                    
-                    currentLine = "- [ ] \(taskLine) ^\(taskId)"
-                    contentChanged = true
-                }
-                
-                // Add task to the list
-                var dueDate: Date? = nil
-                if let dateMatch = dateRegex.firstMatch(in: taskLine, range: NSRange(taskLine.startIndex..., in: taskLine)),
-                   let dateRange = Range(dateMatch.range(at: 1), in: taskLine) {
-                    dueDate = dateFormatter.date(from: String(taskLine[dateRange]))
-                }
-                
+                // Clean task text to check for #cl tag first
                 let cleanTaskText = taskLine.replacingOccurrences(of: " 📅 \\d{4}-\\d{2}-\\d{2}", with: "", options: .regularExpression)
                                           .replacingOccurrences(of: " ⏳ \\d{4}-\\d{2}-\\d{2}", with: "", options: .regularExpression)
                                           .replacingOccurrences(of: " \\^[A-Z0-9-]+", with: "", options: .regularExpression)
                                           .replacingOccurrences(of: " <!-- id: [A-Z0-9-]+ -->", with: "", options: .regularExpression)
                                           .trimmingCharacters(in: .whitespaces)
                 
-                // Skip tasks with #cl tag
-                if !cleanTaskText.contains("#cl") {
+                var taskId: String = ""
+                
+                // Skip #cl tasks - don't assign IDs to them
+                if containsClTag(cleanTaskText) {
+                    // Keep original line without ID for #cl tasks
+                    currentLine = line
+                } else {
+                    // Check for existing ID in either format
+                    if let idRange = Range(match.range(at: 3), in: line) {
+                        taskId = String(line[idRange])
+                    } else if let idRange = Range(match.range(at: 4), in: line) {
+                        taskId = String(line[idRange])
+                    } else {
+                        // Generate new ID if none exists (only for non-#cl tasks)
+                        if let existingMapping = mappingStore.findMapping(filePath: normalizedPath, taskText: cleanTaskText) {
+                            taskId = existingMapping.obsidianId
+                        } else {
+                            taskId = UUID().uuidString
+                        }
+                        
+                        currentLine = "- [ ] \(taskLine) ^\(taskId)"
+                        contentChanged = true
+                    }
+                    
+                    // Add task to the list (only non-#cl tasks)
+                    var dueDate: Date? = nil
+                    if let dateMatch = dateRegex.firstMatch(in: taskLine, range: NSRange(taskLine.startIndex..., in: taskLine)),
+                       let dateRange = Range(dateMatch.range(at: 1), in: taskLine) {
+                        dueDate = dateFormatter.date(from: String(taskLine[dateRange]))
+                    }
+                    
                     tasks.append(ObsidianTask(
                         id: taskId,
                         text: cleanTaskText,
                         dueDate: dueDate,
-                        filePath: fileBaseName + ".md",
+                        filePath: normalizedPath,
                         vaultPath: vaultPath,
                         isCompleted: false
                     ))
@@ -407,6 +418,12 @@ public func findCompletedTasks(in vaultPath: String) throws -> [ObsidianTask] {
         // Get path relative to vault
         let relativePath = fileURL.path.replacingOccurrences(of: vaultPath, with: "")
         
+        // Normalize path by removing leading slash for consistent mapping keys
+        var normalizedPath = relativePath
+        if normalizedPath.hasPrefix("/") {
+            normalizedPath = String(normalizedPath.dropFirst())
+        }
+        
         guard fileURL.pathExtension == "md",
               fileURL.lastPathComponent != "_AppleReminders.md",
               !fileURL.lastPathComponent.hasPrefix("._"),
@@ -447,7 +464,6 @@ public func findCompletedTasks(in vaultPath: String) throws -> [ObsidianTask] {
                 dueDate = dateFormatter.date(from: String(taskLine[dateRange]))
             }
             
-            let fileBaseName = fileURL.deletingPathExtension().lastPathComponent
             let cleanTaskText = taskLine.replacingOccurrences(of: " 📅 \\d{4}-\\d{2}-\\d{2}", with: "", options: .regularExpression)
                                       .replacingOccurrences(of: " ⏳ \\d{4}-\\d{2}-\\d{2}", with: "", options: .regularExpression)
                                       .replacingOccurrences(of: " \\^[A-Z0-9-]+", with: "", options: .regularExpression)
@@ -455,12 +471,12 @@ public func findCompletedTasks(in vaultPath: String) throws -> [ObsidianTask] {
                                       .trimmingCharacters(in: .whitespaces)
             
             // Skip tasks with #cl tag
-            if !cleanTaskText.contains("#cl") {
+            if !containsClTag(cleanTaskText) {
                 tasks.append(ObsidianTask(
                     id: taskId,
                     text: cleanTaskText,
                     dueDate: dueDate,
-                    filePath: fileBaseName + ".md",
+                    filePath: normalizedPath,
                     vaultPath: vaultPath,
                     isCompleted: true
                 ))
@@ -495,7 +511,7 @@ public func syncTasksFromVault(tasks: [ObsidianTask], eventStore: EKEventStore) 
     print("Found \(existingReminders.count) existing reminders")
     
     // Filter out tasks containing #cl tag - secondary safety check
-    let filteredTasks = tasks.filter { !$0.text.contains("#cl") }
+    let filteredTasks = tasks.filter { !containsClTag($0.text) }
     print("Filtered out \(tasks.count - filteredTasks.count) tasks with #cl tag")
     
     for task in filteredTasks {
@@ -599,7 +615,7 @@ public func syncCompletedReminders(eventStore: EKEventStore, vaultPath: String) 
     
     // Filter out tasks with #cl tag - secondary safety check
     let originalCount = allTasks.count
-    allTasks = allTasks.filter { !$0.text.contains("#cl") }
+    allTasks = allTasks.filter { !containsClTag($0.text) }
     print("Filtered out \(originalCount - allTasks.count) tasks with #cl tag")
     
     // 2. Get all reminders
@@ -809,7 +825,7 @@ public func findAllTasks(in vaultPath: String) throws -> [ObsidianTask] {
                 )
                 
                 // Skip tasks with #cl tag
-                if !taskText.contains("#cl") {
+                if !containsClTag(taskText) {
                     tasks.append(task)
                 }
             }

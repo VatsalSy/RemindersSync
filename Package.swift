@@ -58,6 +58,10 @@ let package = Package(
             linkerSettings: [
                 .linkedFramework("EventKit")
             ]
+        ),
+        .testTarget(
+            name: "RemindersSyncCoreTests",
+            dependencies: ["RemindersSyncCore"]
         )
     ]
 )
