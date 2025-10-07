@@ -540,7 +540,9 @@ public func syncTasksFromVault(tasks: [ObsidianTask], eventStore: EKEventStore) 
         
         // Store the Obsidian ID in the notes
         var notes = [String]()
-        notes.append("obsidian://open?vault=\(task.vaultPath.components(separatedBy: "/").last ?? "")&file=\(task.filePath)")
+        if let obsidianURL = task.obsidianURL?.absoluteString {
+            notes.append(obsidianURL)
+        }
         notes.append("ID: \(task.id)")
         reminder.notes = notes.joined(separator: "\n")
         
