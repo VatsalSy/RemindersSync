@@ -497,6 +497,11 @@ public func syncTasksFromVault(tasks: [ObsidianTask], eventStore: EKEventStore) 
     let existingReminders = try await withCheckedThrowingContinuation { continuation in
         eventStore.fetchReminders(matching: predicate) { reminders in
             if let reminders = reminders {
+                for reminder in reminders {
+                    if let existingURL = reminder.url?.absoluteString {
+                        print("Existing reminder \(reminder.title ?? "") has url: \(existingURL)")
+                    }
+                }
                 continuation.resume(returning: reminders)
             } else {
                 continuation.resume(throwing: NSError(
@@ -539,12 +544,20 @@ public func syncTasksFromVault(tasks: [ObsidianTask], eventStore: EKEventStore) 
         }
         
         // Store the Obsidian ID in the notes
+        let obsidianURL = task.obsidianURL
         var notes = [String]()
-        if let obsidianURL = task.obsidianURL?.absoluteString {
-            notes.append(obsidianURL)
+        if let obsidianURLString = obsidianURL?.absoluteString {
+            print("Setting reminder.url for task \(task.id) to \(obsidianURLString)")
+            notes.append(obsidianURLString)
         }
         notes.append("ID: \(task.id)")
         reminder.notes = notes.joined(separator: "\n")
+        reminder.url = obsidianURL
+        if let urlString = reminder.url?.absoluteString {
+            print("Saved reminder.url for task \(task.id): \(urlString)")
+        } else {
+            print("Reminder.url cleared for task \(task.id)")
+        }
         
         try eventStore.save(reminder, commit: false)
         
@@ -580,6 +593,11 @@ public func syncObsidianCompletedTasks(tasks: [ObsidianTask], eventStore: EKEven
     let reminders = try await withCheckedThrowingContinuation { continuation in
         eventStore.fetchReminders(matching: predicate) { reminders in
             if let reminders = reminders {
+                for reminder in reminders {
+                    if let existingURL = reminder.url?.absoluteString {
+                        print("Existing reminder (completion sync) \(reminder.title ?? "") has url: \(existingURL)")
+                    }
+                }
                 continuation.resume(returning: reminders)
             } else {
                 continuation.resume(throwing: NSError(
@@ -718,12 +736,20 @@ public func syncCompletedReminders(eventStore: EKEventStore, vaultPath: String) 
                     newReminder.dueDateComponents = Calendar.current.dateComponents([.year, .month, .day], from: dueDate)
                 }
                 
+                let obsidianURL = task.obsidianURL
                 var notes = [String]()
-                if let obsidianURL = task.obsidianURL?.absoluteString {
-                    notes.append(obsidianURL)
+                if let obsidianURLString = obsidianURL?.absoluteString {
+                    print("Setting new reminder.url for task \(task.id) to \(obsidianURLString)")
+                    notes.append(obsidianURLString)
                 }
                 notes.append("ID: \(task.id)")
                 newReminder.notes = notes.joined(separator: "\n")
+                newReminder.url = obsidianURL
+                if let urlString = newReminder.url?.absoluteString {
+                    print("Saved new reminder.url for task \(task.id): \(urlString)")
+                } else {
+                    print("New reminder.url cleared for task \(task.id)")
+                }
                 
                 try eventStore.save(newReminder, commit: true)
                 

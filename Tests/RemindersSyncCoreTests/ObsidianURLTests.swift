@@ -18,6 +18,8 @@ final class ObsidianURLTests: XCTestCase {
         let absoluteString = url.absoluteString
         XCTAssertFalse(absoluteString.contains(" "), "URL should not contain raw spaces: \(absoluteString)")
         XCTAssertTrue(absoluteString.contains("%20"), "URL should percent-encode spaces: \(absoluteString)")
+        XCTAssertEqual(url.scheme, "obsidian")
+        XCTAssertEqual(url.host, "open")
         let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         let vaultValue = components?.queryItems?.first(where: { $0.name == "vault" })?.value
         let fileValue = components?.queryItems?.first(where: { $0.name == "file" })?.value
@@ -41,6 +43,8 @@ final class ObsidianURLTests: XCTestCase {
         let absoluteString = url.absoluteString
         XCTAssertFalse(absoluteString.contains("#"), "URL should encode fragment character: \(absoluteString)")
         XCTAssertTrue(absoluteString.contains("%23"), "URL should percent-encode #: \(absoluteString)")
+        XCTAssertEqual(url.scheme, "obsidian")
+        XCTAssertEqual(url.host, "open")
         let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         let fileValue = components?.queryItems?.first(where: { $0.name == "file" })?.value
         XCTAssertEqual(fileValue, "Areas/Finance/Statement #1 (Draft).md")
