@@ -82,13 +82,9 @@ struct CleanUpCLI {
         
         while let fileURL = enumerator?.nextObject() as? URL {
             let relativePath = fileURL.path.replacingOccurrences(of: vaultPath, with: "")
-            guard fileURL.pathExtension == "md",
-                  !fileURL.lastPathComponent.hasPrefix("._"),
-                  fileURL.lastPathComponent != "_AppleReminders.md",
-                  fileURL.lastPathComponent != "CLAUDE.md",
-                  fileURL.lastPathComponent != "AGENTS.md",
-                  !relativePath.contains("/Templates/"),
-                  !relativePath.contains("/aiprompts/") else {
+
+            // Skip files that should be excluded
+            guard !shouldExcludeFile(fileURL: fileURL, relativePath: relativePath) else {
                 continue
             }
             

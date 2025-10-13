@@ -45,18 +45,14 @@ let enumerator = fileManager.enumerator(
 )
 
 while let fileURL = enumerator?.nextObject() as? URL {
-    // Skip non-markdown files and special files
+    // Calculate relative path for exclusion checks
     let vaultURL = URL(fileURLWithPath: vaultPath)
-    let relativePath = fileURL.path.hasPrefix(vaultURL.path) 
+    let relativePath = fileURL.path.hasPrefix(vaultURL.path)
         ? String(fileURL.path.dropFirst(vaultURL.path.count))
         : fileURL.path
-    guard fileURL.pathExtension == "md",
-          !fileURL.lastPathComponent.hasPrefix("._"),
-          fileURL.lastPathComponent != "_AppleReminders.md",
-          fileURL.lastPathComponent != "CLAUDE.md",
-          fileURL.lastPathComponent != "AGENTS.md",
-          !relativePath.contains("/Templates/"),
-          !relativePath.contains("/aiprompts/") else {
+
+    // Skip files that should be excluded
+    guard !shouldExcludeFile(fileURL: fileURL, relativePath: relativePath) else {
         continue
     }
     
