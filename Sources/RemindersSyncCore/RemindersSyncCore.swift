@@ -124,7 +124,7 @@ public struct CLIOptions {
     
     public static func parse() -> CLIOptions {
         let args = CommandLine.arguments
-        
+
         if args.count != 2 {
             print("Usage: \(args[0]) <path-to-obsidian-vault>")
             print("Example: \(args[0]) ~/Documents/MyVault")
@@ -133,8 +133,16 @@ public struct CLIOptions {
             print("- Export reminders to: <vault>/_AppleReminders.md")
             exit(1)
         }
-        
-        return CLIOptions(vaultPath: (args[1] as NSString).expandingTildeInPath)
+
+        let expandedPath = (args[1] as NSString).expandingTildeInPath
+        do {
+            try validateVaultPath(expandedPath)
+        } catch {
+            print("Error: \(error.localizedDescription)")
+            exit(1)
+        }
+
+        return CLIOptions(vaultPath: expandedPath)
     }
 }
 

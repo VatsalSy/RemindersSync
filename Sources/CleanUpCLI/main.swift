@@ -20,6 +20,13 @@ struct CleanUpCLI {
         }
         
         let vaultPath = (args[1] as NSString).expandingTildeInPath
+        do {
+            try validateVaultPath(vaultPath)
+        } catch {
+            print("Error: \(error.localizedDescription)")
+            exit(1)
+        }
+
         let eventStore = EKEventStore()
         
         do {

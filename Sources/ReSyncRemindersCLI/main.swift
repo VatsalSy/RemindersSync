@@ -15,6 +15,13 @@ if args.count != 2 {
 }
 
 let vaultPath = (args[1] as NSString).expandingTildeInPath
+do {
+    try validateVaultPath(vaultPath)
+} catch {
+    print("Error: \(error.localizedDescription)")
+    exit(1)
+}
+
 let fileManager = FileManager.default
 
 // Regex patterns
@@ -46,10 +53,8 @@ let enumerator = fileManager.enumerator(
 )
 
 while let fileURL = enumerator?.nextObject() as? URL {
-    // Calculate relative path for exclusion checks
-    let relativePath = fileURL.path.hasPrefix(vaultURL.path)
-        ? String(fileURL.path.dropFirst(vaultURL.path.count))
-        : fileURL.path
+    // Calculate relative path using centralized helper (normalized, no leading slash)
+    let relativePath = safeRelativePath(fileURL: fileURL, vaultURL: vaultURL)
 
     // Skip files that should be excluded
     guard !shouldExcludeFile(fileURL: fileURL, relativePath: relativePath) else {
