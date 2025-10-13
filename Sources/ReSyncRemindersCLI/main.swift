@@ -53,6 +53,8 @@ while let fileURL = enumerator?.nextObject() as? URL {
     guard fileURL.pathExtension == "md",
           !fileURL.lastPathComponent.hasPrefix("._"),
           fileURL.lastPathComponent != "_AppleReminders.md",
+          fileURL.lastPathComponent != "CLAUDE.md",
+          fileURL.lastPathComponent != "AGENTS.md",
           !relativePath.contains("/Templates/"),
           !relativePath.contains("/aiprompts/") else {
         continue

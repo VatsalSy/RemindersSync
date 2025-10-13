@@ -218,6 +218,8 @@ public func findIncompleteTasks(in vaultPath: String) throws -> [ObsidianTask] {
         
         guard fileURL.pathExtension == "md",
               fileURL.lastPathComponent != "_AppleReminders.md",
+              fileURL.lastPathComponent != "CLAUDE.md",
+              fileURL.lastPathComponent != "AGENTS.md",
               !fileURL.lastPathComponent.hasPrefix("._"),
               !relativePath.contains("/Templates/"),
               !relativePath.contains("/aiprompts/") else {
@@ -426,6 +428,8 @@ public func findCompletedTasks(in vaultPath: String) throws -> [ObsidianTask] {
         
         guard fileURL.pathExtension == "md",
               fileURL.lastPathComponent != "_AppleReminders.md",
+              fileURL.lastPathComponent != "CLAUDE.md",
+              fileURL.lastPathComponent != "AGENTS.md",
               !fileURL.lastPathComponent.hasPrefix("._"),
               !relativePath.contains("/Templates/"),
               !relativePath.contains("/aiprompts/") else {
@@ -814,6 +818,8 @@ public func findAllTasks(in vaultPath: String) throws -> [ObsidianTask] {
     while let fileURL = enumerator?.nextObject() as? URL {
         guard fileURL.pathExtension == "md",
               fileURL.lastPathComponent != "_AppleReminders.md",
+              fileURL.lastPathComponent != "CLAUDE.md",
+              fileURL.lastPathComponent != "AGENTS.md",
               !fileURL.lastPathComponent.hasPrefix("._") else {
             continue
         }
@@ -1086,6 +1092,8 @@ public func cleanupTaskIds(in vaultPath: String) throws {
     while let fileURL = enumerator?.nextObject() as? URL {
         guard fileURL.pathExtension == "md",
               fileURL.lastPathComponent != "_AppleReminders.md",
+              fileURL.lastPathComponent != "CLAUDE.md",
+              fileURL.lastPathComponent != "AGENTS.md",
               !fileURL.lastPathComponent.hasPrefix("._") else {
             continue
         }
