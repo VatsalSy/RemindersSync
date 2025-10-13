@@ -1,23 +1,19 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-RemindersSync is a Swift Package defined by `Package.swift`. Core sync logic lives in `Sources/RemindersSyncCore`, while CLI entrypoints reside in `Sources/<ToolName>CLI` (e.g., `Sources/SwiftRemindersCLI`). Tests for the core module are under `Tests/RemindersSyncCoreTests`. `install.sh` and `uninstall.sh` wrap release builds for system-wide installation, and `TestVault/` provides sample markdown data for manual verification.
+RemindersSync is a Swift Package managed by `Package.swift`. Core sync logic and shared models live in `Sources/RemindersSyncCore`, while each CLI tool sits in `Sources/<ToolName>CLI` (e.g., `Sources/SwiftRemindersCLI`). Automated scripts such as `install.sh` and `uninstall.sh` wrap release builds for system installs, and `TestVault/` supplies sample Markdown reminders for manual dry runs. Contributor tooling and historical agent specs reside outside this tree; keep edits to this repo focused on the Swift package.
 
 ## Build, Test, and Development Commands
-- `swift build` compiles all targets and surfaces compiler diagnostics.
-- `swift run RemindersSync /path/to/vault` performs the primary two-way Obsidian↔︎Reminders sync; swap the target name to exercise `ScanVault`, `ExportOtherReminders`, `ReSyncReminders`, or `CleanUp`.
-- `swift run ExportOtherReminders --help` lists CLI flags, useful for discovering cleanup/reset options.
-- `swift test` executes `RemindersSyncCoreTests`; pair with `--parallel` for faster local feedback.
-- `sudo ./install.sh` installs release binaries into `/usr/local/bin`; rerun after dependency updates.
+Use `swift build` to compile all targets and surface compiler diagnostics. Run `swift run RemindersSync /path/to/vault` for the primary Obsidian↔︎Reminders sync; swap the target name to reach utilities like `ScanVault`, `ExportOtherReminders`, `ReSyncReminders`, or `CleanUp`. Execute `swift test` (optionally with `--parallel`) to exercise `RemindersSyncCoreTests`. Install release binaries with `sudo ./install.sh`; uninstall via `sudo ./uninstall.sh`. Favor `swift run ExportOtherReminders --help` to review cleanup and reset flags before destructive operations.
 
 ## Coding Style & Naming Conventions
-Target Swift 5.9 and align with the Swift API Design Guidelines: four-space indentation, `UpperCamelCase` types, `lowerCamelCase` methods and properties. Prefer struct-based modeling in the core layer and isolate system integrations behind protocols for testability. Keep CLI targets suffixed with `CLI` to match existing module naming and expose user-facing commands through `swift run <ToolName>` or aliased binaries.
+Target Swift 5.9. Follow four-space indentation and the Swift API Design Guidelines: `UpperCamelCase` for types, `lowerCamelCase` for functions and properties. Keep CLI targets suffixed with `CLI`, and favor structs plus protocol-backed integrations for testability. Avoid hardcoded absolute paths; accept vault locations via arguments.
 
 ## Testing Guidelines
-Extend the coverage-focused `Tests/RemindersSyncCoreTests` suite when adjusting sync logic; mirror behaviors with descriptive `test_<Scenario>_<Expectation>` methods. Use `swift test --enable-code-coverage` when validating substantial refactors, and review the generated report in Xcode. For integration changes, stage realistic markdown files in `TestVault/` and dry-run the relevant tool with `--cleanup` or `--help` before touching production data.
+Unit coverage lives under `Tests/RemindersSyncCoreTests` with `test_<Scenario>_<Expectation>` naming. Add focused cases whenever sync logic changes, and prefer deterministic fixtures. For larger shifts, run `swift test --enable-code-coverage` and inspect results in Xcode. Validate integration flows against `TestVault/` before touching live data, and document any manual reproduction steps in PRs.
 
 ## Commit & Pull Request Guidelines
-Write commits in the imperative mood (`Fix file path normalization`, `Add resync shortcut`) and keep subjects under ~50 characters; include a brief body explaining the motivation plus relevant CLI output when behavior changes. PRs should describe the impacted tools, list manual validation steps (`swift run RemindersSync TestVault`), link any tracked issues, and call out permissions considerations for reviewers. Request a CI run after major sync workflow adjustments to avoid regressions in release binaries.
+Write imperative commit subjects under ~50 characters (e.g., `Add resync shortcut`). Summaries should mention motivation plus relevant CLI output when behavior changes. Pull requests must describe affected tools, list validation commands (`swift run RemindersSync TestVault`), link issues, and flag permissions or migration steps. Confirm CI’s Agent Consistency Check passes before requesting review.
 
 ## Security & Configuration Tips
-Never hardcode vault paths, Apple IDs, or tokens; prefer arguments and environment variables consumed by the CLI wrappers. macOS will prompt for Reminders access on first run—advise contributors to use the native Terminal if third-party shells hide the dialog. Keep `install.sh` invocations scoped to trusted machines and audit resulting binaries before distribution.
+Never commit vault paths, Apple IDs, or credentials. Prefer environment variables and CLI flags for secrets. macOS prompts for Reminders access on first run—use the native Terminal so the dialog appears. Audit release binaries after running `install.sh`, and restrict distribution to trusted environments.
