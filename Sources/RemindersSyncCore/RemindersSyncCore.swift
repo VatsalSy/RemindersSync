@@ -45,6 +45,72 @@ public struct ObsidianTask {
     }
 }
 
+/// Determines if a file should be excluded from task scanning based on file and directory patterns
+/// - Parameters:
+///   - fileURL: The URL of the file to check
+///   - relativePath: The relative path of the file from the vault root
+/// - Returns: `true` if the file should be excluded, `false` otherwise
+public func shouldExcludeFile(fileURL: URL, relativePath: String) -> Bool {
+    // Extension check - only process markdown files
+    guard fileURL.pathExtension == "md" else { return true }
+
+    let filename = fileURL.lastPathComponent
+
+    // File-level exclusions
+    if filename.hasPrefix("._") { return true }
+    if filename == "_AppleReminders.md" { return true }
+    if filename == "CLAUDE.md" { return true }
+    if filename == "AGENTS.md" { return true }
+
+    // Directory-level exclusions using exact component matching
+    // This prevents false matches like "/MyTemplates/" or "/project.claude/"
+    if containsExcludedDirectory(relativePath) { return true }
+
+    return false
+}
+
+/// Validates that a vault path is absolute and properly formatted
+/// - Parameter vaultPath: The vault path to validate
+/// - Throws: An error if the path is not absolute
+public func validateVaultPath(_ vaultPath: String) throws {
+    guard vaultPath.hasPrefix("/") || vaultPath.hasPrefix("~") else {
+        throw NSError(
+            domain: "RemindersSync",
+            code: 1,
+            userInfo: [NSLocalizedDescriptionKey: "Vault path must be absolute. Got: \(vaultPath)"]
+        )
+    }
+}
+
+/// Safely computes relative path from vault root, handling path prefixes correctly
+/// - Parameters:
+///   - fileURL: The URL of the file
+///   - vaultURL: The URL of the vault root
+/// - Returns: The relative path with leading slash removed for consistency
+public func safeRelativePath(fileURL: URL, vaultURL: URL) -> String {
+    let filePath = fileURL.path
+    let vaultPath = vaultURL.path
+
+    guard filePath.hasPrefix(vaultPath) else {
+        return filePath
+    }
+
+    let relativePath = String(filePath.dropFirst(vaultPath.count))
+    // Normalize by removing leading slash for consistency
+    return relativePath.hasPrefix("/")
+        ? String(relativePath.dropFirst())
+        : relativePath
+}
+
+/// Checks if any path component exactly matches excluded directory names
+/// - Parameter relativePath: The relative path to check
+/// - Returns: `true` if path contains any excluded directory component
+public func containsExcludedDirectory(_ relativePath: String) -> Bool {
+    let components = relativePath.split(separator: "/").map(String.init)
+    let excludedDirs = ["Templates", "aiprompts", ".claude", ".gemini", ".codex", ".cursor"]
+    return components.contains(where: { excludedDirs.contains($0) })
+}
+
 public struct CLIOptions {
     public let vaultPath: String
     
@@ -58,7 +124,7 @@ public struct CLIOptions {
     
     public static func parse() -> CLIOptions {
         let args = CommandLine.arguments
-        
+
         if args.count != 2 {
             print("Usage: \(args[0]) <path-to-obsidian-vault>")
             print("Example: \(args[0]) ~/Documents/MyVault")
@@ -67,8 +133,16 @@ public struct CLIOptions {
             print("- Export reminders to: <vault>/_AppleReminders.md")
             exit(1)
         }
-        
-        return CLIOptions(vaultPath: (args[1] as NSString).expandingTildeInPath)
+
+        let expandedPath = (args[1] as NSString).expandingTildeInPath
+        do {
+            try validateVaultPath(expandedPath)
+        } catch {
+            print("Error: \(error.localizedDescription)")
+            exit(1)
+        }
+
+        return CLIOptions(vaultPath: expandedPath)
     }
 }
 
@@ -193,34 +267,26 @@ public func findIncompleteTasks(in vaultPath: String) throws -> [ObsidianTask] {
     var tasks: [ObsidianTask] = []
     var updatedFiles: [(URL, String)] = []
     let fileManager = FileManager.default
+    let vaultURL = URL(fileURLWithPath: vaultPath)
     let enumerator = fileManager.enumerator(
-        at: URL(fileURLWithPath: vaultPath),
+        at: vaultURL,
         includingPropertiesForKeys: [.isRegularFileKey],
         options: [.skipsHiddenFiles]
     )
-    
+
     let dateRegex = try NSRegularExpression(pattern: "📅 (\\d{4}-\\d{2}-\\d{2})")
     let taskRegex = try NSRegularExpression(pattern: "- \\[([ xX])\\] (.+?)(?:\\s*(?:\\^([A-Z0-9-]+)|<!-- id: ([A-Z0-9-]+) -->))?$", options: .anchorsMatchLines)
     let dateFormatter = DateFormatter()
     dateFormatter.dateFormat = "yyyy-MM-dd"
-    
+
     let mappingStore = try loadTaskMappings(vaultPath: vaultPath)
-    
+
     while let fileURL = enumerator?.nextObject() as? URL {
-        // Get path relative to vault
-        let relativePath = fileURL.path.replacingOccurrences(of: vaultPath, with: "")
-        
-        // Normalize path by removing leading slash for consistent mapping keys
-        var normalizedPath = relativePath
-        if normalizedPath.hasPrefix("/") {
-            normalizedPath = String(normalizedPath.dropFirst())
-        }
-        
-        guard fileURL.pathExtension == "md",
-              fileURL.lastPathComponent != "_AppleReminders.md",
-              !fileURL.lastPathComponent.hasPrefix("._"),
-              !relativePath.contains("/Templates/"),
-              !relativePath.contains("/aiprompts/") else {
+        // Get safe relative path (already normalized)
+        let normalizedPath = safeRelativePath(fileURL: fileURL, vaultURL: vaultURL)
+
+        // Skip files that should be excluded
+        guard !shouldExcludeFile(fileURL: fileURL, relativePath: normalizedPath) else {
             continue
         }
         
@@ -403,32 +469,24 @@ public func findIncompleteTasks(in vaultPath: String) throws -> [ObsidianTask] {
 public func findCompletedTasks(in vaultPath: String) throws -> [ObsidianTask] {
     var tasks: [ObsidianTask] = []
     let fileManager = FileManager.default
+    let vaultURL = URL(fileURLWithPath: vaultPath)
     let enumerator = fileManager.enumerator(
-        at: URL(fileURLWithPath: vaultPath),
+        at: vaultURL,
         includingPropertiesForKeys: [.isRegularFileKey],
         options: [.skipsHiddenFiles]
     )
-    
+
     let dateRegex = try NSRegularExpression(pattern: "📅 (\\d{4}-\\d{2}-\\d{2})")
     let taskRegex = try NSRegularExpression(pattern: "- \\[([xX])\\] (.+?)(?:\\s*(?:\\^([A-Z0-9-]+)|<!-- id: ([A-Z0-9-]+) -->))?$", options: .anchorsMatchLines)
     let dateFormatter = DateFormatter()
     dateFormatter.dateFormat = "yyyy-MM-dd"
-    
+
     while let fileURL = enumerator?.nextObject() as? URL {
-        // Get path relative to vault
-        let relativePath = fileURL.path.replacingOccurrences(of: vaultPath, with: "")
-        
-        // Normalize path by removing leading slash for consistent mapping keys
-        var normalizedPath = relativePath
-        if normalizedPath.hasPrefix("/") {
-            normalizedPath = String(normalizedPath.dropFirst())
-        }
-        
-        guard fileURL.pathExtension == "md",
-              fileURL.lastPathComponent != "_AppleReminders.md",
-              !fileURL.lastPathComponent.hasPrefix("._"),
-              !relativePath.contains("/Templates/"),
-              !relativePath.contains("/aiprompts/") else {
+        // Get safe relative path (already normalized)
+        let normalizedPath = safeRelativePath(fileURL: fileURL, vaultURL: vaultURL)
+
+        // Skip files that should be excluded
+        guard !shouldExcludeFile(fileURL: fileURL, relativePath: normalizedPath) else {
             continue
         }
         
@@ -803,18 +861,21 @@ public func syncCompletedReminders(eventStore: EKEventStore, vaultPath: String) 
 public func findAllTasks(in vaultPath: String) throws -> [ObsidianTask] {
     var tasks: [ObsidianTask] = []
     let fileManager = FileManager.default
+    let vaultURL = URL(fileURLWithPath: vaultPath)
     let enumerator = fileManager.enumerator(
-        at: URL(fileURLWithPath: vaultPath),
+        at: vaultURL,
         includingPropertiesForKeys: [.isRegularFileKey],
         options: [.skipsHiddenFiles]
     )
-    
+
     let taskRegex = try NSRegularExpression(pattern: "- \\[([xX ])\\] (.+?)(?:\\s*(?:\\^([A-Z0-9-]+)|<!-- id: ([A-Z0-9-]+) -->))?$", options: .anchorsMatchLines)
-    
+
     while let fileURL = enumerator?.nextObject() as? URL {
-        guard fileURL.pathExtension == "md",
-              fileURL.lastPathComponent != "_AppleReminders.md",
-              !fileURL.lastPathComponent.hasPrefix("._") else {
+        // Get safe relative path (already normalized)
+        let relativePath = safeRelativePath(fileURL: fileURL, vaultURL: vaultURL)
+
+        // Skip files that should be excluded
+        guard !shouldExcludeFile(fileURL: fileURL, relativePath: relativePath) else {
             continue
         }
         
@@ -1072,21 +1133,24 @@ public func exportRemindersToMarkdown(excludeLists: Set<String>, eventStore: EKE
 
 public func cleanupTaskIds(in vaultPath: String) throws {
     let fileManager = FileManager.default
+    let vaultURL = URL(fileURLWithPath: vaultPath)
     let enumerator = fileManager.enumerator(
-        at: URL(fileURLWithPath: vaultPath),
+        at: vaultURL,
         includingPropertiesForKeys: [.isRegularFileKey],
         options: [.skipsHiddenFiles]
     )
-    
+
     var updatedFiles: [(URL, String)] = []
-    
+
     // Match both formats: ^ID and <!-- id: ID -->
     let taskRegex = try NSRegularExpression(pattern: "- \\[([ xX])\\] (.+?)(?:\\s*(?:\\^([A-Z0-9-]+)|<!-- id: ([A-Z0-9-]+) -->))?$", options: .anchorsMatchLines)
-    
+
     while let fileURL = enumerator?.nextObject() as? URL {
-        guard fileURL.pathExtension == "md",
-              fileURL.lastPathComponent != "_AppleReminders.md",
-              !fileURL.lastPathComponent.hasPrefix("._") else {
+        // Get safe relative path (already normalized)
+        let relativePath = safeRelativePath(fileURL: fileURL, vaultURL: vaultURL)
+
+        // Skip files that should be excluded
+        guard !shouldExcludeFile(fileURL: fileURL, relativePath: relativePath) else {
             continue
         }
         

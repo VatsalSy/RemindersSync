@@ -120,7 +120,14 @@ struct ExportOtherRemindersCLI {
                 exit(1)
             }
             
-            let vaultPath = CommandLine.arguments[1]
+            let vaultPath = (CommandLine.arguments[1] as NSString).expandingTildeInPath
+            do {
+                try validateVaultPath(vaultPath)
+            } catch {
+                print("Error: \(error.localizedDescription)")
+                exit(1)
+            }
+
             let eventStore = EKEventStore()
             try await requestRemindersAccess(eventStore: eventStore)
             

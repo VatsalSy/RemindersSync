@@ -20,6 +20,13 @@ struct CleanUpCLI {
         }
         
         let vaultPath = (args[1] as NSString).expandingTildeInPath
+        do {
+            try validateVaultPath(vaultPath)
+        } catch {
+            print("Error: \(error.localizedDescription)")
+            exit(1)
+        }
+
         let eventStore = EKEventStore()
         
         do {
@@ -68,25 +75,25 @@ struct CleanUpCLI {
     
     static func removeCompletedTasksFromVault(vaultPath: String) throws -> Int {
         let fileManager = FileManager.default
+        let vaultURL = URL(fileURLWithPath: vaultPath)
         let enumerator = fileManager.enumerator(
-            at: URL(fileURLWithPath: vaultPath),
+            at: vaultURL,
             includingPropertiesForKeys: [.isRegularFileKey],
             options: [.skipsHiddenFiles]
         )
-        
+
         let completedTaskPattern = #"^\s*- \[[xX]\] .+$"#
         let completedRegex = try NSRegularExpression(pattern: completedTaskPattern, options: .anchorsMatchLines)
-        
+
         var totalRemoved = 0
         var filesProcessed = 0
-        
+
         while let fileURL = enumerator?.nextObject() as? URL {
-            let relativePath = fileURL.path.replacingOccurrences(of: vaultPath, with: "")
-            guard fileURL.pathExtension == "md",
-                  !fileURL.lastPathComponent.hasPrefix("._"),
-                  fileURL.lastPathComponent != "_AppleReminders.md",
-                  !relativePath.contains("/Templates/"),
-                  !relativePath.contains("/aiprompts/") else {
+            // Get safe relative path (already normalized)
+            let relativePath = safeRelativePath(fileURL: fileURL, vaultURL: vaultURL)
+
+            // Skip files that should be excluded
+            guard !shouldExcludeFile(fileURL: fileURL, relativePath: relativePath) else {
                 continue
             }
             
