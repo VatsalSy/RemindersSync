@@ -38,15 +38,15 @@ var idsRemoved = 0
 
 print("Preparing vault for fresh sync: \(vaultPath)")
 
+let vaultURL = URL(fileURLWithPath: vaultPath)
 let enumerator = fileManager.enumerator(
-    at: URL(fileURLWithPath: vaultPath),
+    at: vaultURL,
     includingPropertiesForKeys: [.isRegularFileKey],
     options: [.skipsHiddenFiles]
 )
 
 while let fileURL = enumerator?.nextObject() as? URL {
     // Calculate relative path for exclusion checks
-    let vaultURL = URL(fileURLWithPath: vaultPath)
     let relativePath = fileURL.path.hasPrefix(vaultURL.path)
         ? String(fileURL.path.dropFirst(vaultURL.path.count))
         : fileURL.path
