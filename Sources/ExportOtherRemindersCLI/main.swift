@@ -550,8 +550,15 @@ struct ExportOtherRemindersCLI {
             }
             
             // If list doesn't exist, create in default calendar
-            reminder.calendar = targetCalendar ?? eventStore.defaultCalendarForNewReminders()
-            
+            guard let calendar = targetCalendar ?? eventStore.defaultCalendarForNewReminders() else {
+                throw NSError(
+                    domain: "RemindersSync",
+                    code: 2,
+                    userInfo: [NSLocalizedDescriptionKey: "No valid Reminder source found"]
+                )
+            }
+            reminder.calendar = calendar
+
             // Save the reminder
             try eventStore.save(reminder, commit: true)
             print("Created new reminder: \(title) in list: \(reminder.calendar.title)")
@@ -829,8 +836,15 @@ struct ExportOtherRemindersCLI {
                     break
                 }
             }
-            reminder.calendar = inboxCalendar ?? eventStore.defaultCalendarForNewReminders()
-            
+            guard let calendar = inboxCalendar ?? eventStore.defaultCalendarForNewReminders() else {
+                throw NSError(
+                    domain: "RemindersSync",
+                    code: 2,
+                    userInfo: [NSLocalizedDescriptionKey: "No valid Reminder source found"]
+                )
+            }
+            reminder.calendar = calendar
+
             // Save the reminder
             try eventStore.save(reminder, commit: true)
             print("Created new reminder '\(titleOnly)' in Inbox")
@@ -910,8 +924,15 @@ struct ExportOtherRemindersCLI {
                             break
                         }
                     }
-                    reminder.calendar = targetCalendar ?? eventStore.defaultCalendarForNewReminders()
-                    
+                    guard let calendar = targetCalendar ?? eventStore.defaultCalendarForNewReminders() else {
+                        throw NSError(
+                            domain: "RemindersSync",
+                            code: 2,
+                            userInfo: [NSLocalizedDescriptionKey: "No valid Reminder source found"]
+                        )
+                    }
+                    reminder.calendar = calendar
+
                     try eventStore.save(reminder, commit: true)
                 }
             }
