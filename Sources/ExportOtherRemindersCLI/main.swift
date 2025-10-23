@@ -863,34 +863,34 @@ struct ExportOtherRemindersCLI {
     ) async throws {
         // First, process any new tasks without IDs
         try await handleNewTasksWithoutID(eventStore: eventStore, vaultPath: vaultPath)
-        
+
         // Continue with existing sync logic...
         let mdPath = (vaultPath as NSString).appendingPathComponent("_AppleReminders.md")
         var taskDB = try loadTaskDatabase(vaultPath: vaultPath)
         let excludedLists = getExcludedLists(vaultPath: vaultPath)
-        
+
         // Get tasks from both sources
         let mdTasks = try scanMarkdownTasks(vaultPath: vaultPath)
         let reminderTasks = try await scanAppleReminders(eventStore: eventStore, vaultPath: vaultPath)
         
         // Combine all known UUIDs
         var allIds = Set(mdTasks.keys).union(reminderTasks.keys)
-        
+
         // First, handle tasks with UUIDs
         for id in allIds {
             let mdTask = mdTasks[id]
             let reminderTask = reminderTasks[id]
-            
+
             // Skip if the task is in an excluded list
             if let task = mdTask ?? reminderTask {
                 if excludedLists.contains(task.parentList) {
                     continue
                 }
             }
-            
+
             // If task exists in either place and is marked complete, mark it complete everywhere
             let isComplete = (mdTask?.isComplete ?? false) || (reminderTask?.isComplete ?? false)
-            
+
             // Update or create reminder in Apple Reminders
             if let task = mdTask ?? reminderTask {
                 if let reminder = try await findReminderById(id: id, eventStore: eventStore, vaultPath: vaultPath) {
@@ -933,6 +933,7 @@ struct ExportOtherRemindersCLI {
                     }
                     reminder.calendar = calendar
 
+                    print("DEBUG: About to save reminder in syncTasks loop: title='\(reminder.title ?? "nil")', calendar='\(reminder.calendar.title)'")
                     try eventStore.save(reminder, commit: true)
                 }
             }
@@ -946,7 +947,7 @@ struct ExportOtherRemindersCLI {
                 notes: mdTask?.notes ?? reminderTask?.notes ?? ""
             )
         }
-        
+
         // Handle tasks without UUIDs in Apple Reminders
         let allReminders = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<[EKReminder], Error>) in
             eventStore.fetchReminders(matching: eventStore.predicateForReminders(in: nil)) { reminders in
@@ -965,26 +966,34 @@ struct ExportOtherRemindersCLI {
             if excludedLists.contains(reminder.calendar.title) {
                 continue
             }
-            
+
             guard let title = reminder.title,
                   reminder.notes == nil || extractIdFromNotes(reminder.notes!) == nil else { continue }
-            
+
             // Generate new UUID
             let id = UUID().uuidString
-            
-            // Add ID to reminder
-            reminder.notes = (reminder.notes ?? "") + formatIdForNotes(id)
-            try eventStore.save(reminder, commit: true)
+
+            // EventKit reminders cannot be modified after fetching; create a new one instead
+            let newReminder = EKReminder(eventStore: eventStore)
+            newReminder.title = reminder.title
+            newReminder.calendar = reminder.calendar
+            newReminder.isCompleted = reminder.isCompleted
+            newReminder.dueDateComponents = reminder.dueDateComponents
+            newReminder.notes = (reminder.notes ?? "") + formatIdForNotes(id)
+
+            // Delete the old one and save the new one
+            try eventStore.remove(reminder, commit: false)
+            try eventStore.save(newReminder, commit: true)
             
             // Add to task database
             taskDB[id] = TaskStatus(
-                isComplete: reminder.isCompleted,
+                isComplete: newReminder.isCompleted,
                 title: title,
-                dueDate: reminder.dueDateComponents?.date?.description ?? "",
-                parentList: reminder.calendar.title,
-                notes: reminder.notes ?? ""
+                dueDate: newReminder.dueDateComponents?.date?.description ?? "",
+                parentList: newReminder.calendar.title,
+                notes: newReminder.notes ?? ""
             )
-            
+
             allIds.insert(id)
         }
         
